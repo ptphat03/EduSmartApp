@@ -12,21 +12,30 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  final confirmPasswordController = TextEditingController(); // 👈 NEW
   bool isLoading = false;
 
   Future<void> register() async {
+    final password = passwordController.text.trim();
+    final confirmPassword = confirmPasswordController.text.trim();
+
+    if (password != confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Mật khẩu và xác nhận không khớp")),
+      );
+      return;
+    }
+
     setState(() => isLoading = true);
     try {
-      // Tạo tài khoản mới
       UserCredential userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(
         email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+        password: password,
       );
 
       final user = userCredential.user;
       if (user != null) {
-        // Chuyển sang màn hình xác minh email (ở đó sẽ gửi email)
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -72,6 +81,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             TextField(
               controller: passwordController,
               decoration: const InputDecoration(labelText: "Mật khẩu"),
+              obscureText: true,
+            ),
+            TextField(
+              controller: confirmPasswordController,
+              decoration: const InputDecoration(labelText: "Xác nhận mật khẩu"),
               obscureText: true,
             ),
             const SizedBox(height: 20),

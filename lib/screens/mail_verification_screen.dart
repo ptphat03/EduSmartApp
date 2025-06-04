@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
+import 'register_screen.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   final String email;
@@ -49,7 +50,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
           );
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            MaterialPageRoute(builder: (_) => const RegisterScreen()),
                 (_) => false,
           );
         }
@@ -123,10 +124,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   await FirebaseAuth.instance.signOut();
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    MaterialPageRoute(builder: (_) => const RegisterScreen()),
                   );
                 },
-                child: const Text('Huỷ & xoá tài khoản'),
+                child: const Text('Huỷ'),
               )
             ],
           ),

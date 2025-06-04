@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'register_screen.dart';
 import 'main_navigation_screen.dart';
+import 'welcome_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,12 +28,35 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       final user = FirebaseAuth.instance.currentUser;
-
       if (user != null && user.emailVerified) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
-        );
+        final uid = user.uid;
+        final prefs = await SharedPreferences.getInstance();
+
+        final isFirstLogin =
+            user.metadata.creationTime == user.metadata.lastSignInTime;
+        final hasShownWelcome = prefs.getBool('welcome_shown_$uid') ?? false;
+
+        // Kiểm tra xem document "students/{uid}" đã tồn tại chưa
+        final studentDoc = await FirebaseFirestore.instance
+            .collection('students')
+            .doc(uid)
+            .get();
+
+        final shouldShowWelcome =
+            isFirstLogin || !studentDoc.exists || !hasShownWelcome;
+
+        if (shouldShowWelcome) {
+          await prefs.setBool('welcome_shown_$uid', true);
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+          );
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Vui lòng xác thực email trước khi đăng nhập.")),
