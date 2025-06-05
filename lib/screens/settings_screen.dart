@@ -3,6 +3,7 @@ import '../widgets/custom_app_bar.dart';
 import 'login_screen.dart';
 import 'edit_profile_screen.dart';
 import 'change_password_screen.dart';
+import 'show_profile_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -30,7 +31,7 @@ class SettingsScreen extends StatelessWidget {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
               );
             },
           ),
