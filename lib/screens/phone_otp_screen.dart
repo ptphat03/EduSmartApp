@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'main_navigation_screen.dart';
+import 'student_info_screen.dart';
 
 class PhoneOTPScreen extends StatefulWidget {
+  final String phoneNumber;
   final String verificationId;
-  final String phone;
 
   const PhoneOTPScreen({
     super.key,
+    required this.phoneNumber,
     required this.verificationId,
-    required this.phone,
   });
 
   @override
@@ -18,59 +18,86 @@ class PhoneOTPScreen extends StatefulWidget {
 
 class _PhoneOTPScreenState extends State<PhoneOTPScreen> {
   final otpController = TextEditingController();
-  bool isLoading = false;
+  bool isVerifying = false;
 
   Future<void> verifyOTP() async {
-    setState(() => isLoading = true);
+    final otp = otpController.text.trim();
+    if (otp.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Mã OTP không hợp lệ.")),
+      );
+      return;
+    }
+
+    setState(() => isVerifying = true);
+
     try {
       final credential = PhoneAuthProvider.credential(
         verificationId: widget.verificationId,
-        smsCode: otpController.text.trim(),
+        smsCode: otp,
       );
 
-      // Đăng nhập bằng credential
-      await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await user.linkWithCredential(credential);
 
-      // Nếu thành công → chuyển đến màn hình chính
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
-            (route) => false,
-      );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Xác minh số điện thoại thành công.")),
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const StudentInfoScreen()),
+        );
+      }
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Lỗi xác minh: ${e.message}")),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Lỗi không xác định: $e")),
+        SnackBar(content: Text("Lỗi: ${e.message}")),
       );
     } finally {
-      setState(() => isLoading = false);
+      setState(() => isVerifying = false);
     }
+  }
+
+  @override
+  void dispose() {
+    otpController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Xác minh OTP")),
+      appBar: AppBar(
+        title: const Text("Xác minh OTP"),
+        backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            Text("Nhập mã OTP được gửi đến số ${widget.phone}"),
-            const SizedBox(height: 20),
+            Text(
+              "Nhập mã OTP đã gửi đến ${widget.phoneNumber}",
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16),
             TextField(
               controller: otpController,
-              decoration: const InputDecoration(labelText: "Mã OTP"),
               keyboardType: TextInputType.number,
+              maxLength: 6,
+              decoration: const InputDecoration(
+                labelText: "Mã OTP",
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 20),
-            isLoading
+            isVerifying
                 ? const CircularProgressIndicator()
-                : ElevatedButton(
+                : ElevatedButton.icon(
               onPressed: verifyOTP,
-              child: const Text("Xác nhận"),
+              icon: const Icon(Icons.verified),
+              label: const Text("Xác minh"),
             ),
           ],
         ),

@@ -19,6 +19,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final schoolController = TextEditingController();
   final phoneController = TextEditingController();
 
+  final emailChangeController = TextEditingController();
+  final currentPasswordController = TextEditingController();
+  final newPasswordController = TextEditingController();
+
   bool isLoading = true;
 
   @override
@@ -70,7 +74,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         const SnackBar(content: Text("Cập nhật thành công!")),
       );
 
-      Navigator.pop(context); // Quay lại Profile
+      Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Lỗi: $e")),
@@ -78,74 +82,123 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-    @override
-    Widget build(BuildContext context) {
-      final email = user?.email ?? '(Không có)';
-      final phone = user?.phoneNumber ?? '(Không có)';
+  Future<void> changeEmail() async {
+    final newEmail = emailChangeController.text.trim();
+    if (newEmail.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Vui lòng nhập email mới.")),
+      );
+      return;
+    }
 
-      return Scaffold(
-        appBar: AppBar(
-          backgroundColor: Colors.green,
-          title: const Text("Chỉnh sửa hồ sơ", style: TextStyle(color: Colors.white)),
-          iconTheme: const IconThemeData(color: Colors.white),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () async {
-              final shouldLeave = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                  contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                  actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  title: Row(
-                    children: const [
-                      Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-                      SizedBox(width: 8),
-                      Text("Xác nhận rời khỏi"),
-                    ],
-                  ),
-                  content: const Text(
-                    "Bạn có chắc muốn rời khỏi? Các thay đổi chưa lưu sẽ bị mất.",
-                    style: TextStyle(fontSize: 16),
-                  ),
-                  actions: [
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey[700],
-                        textStyle: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text("Ở lại"),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        foregroundColor: Colors.white,
-                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text("Rời khỏi"),
-                    ),
-                  ],
-                ),
-              );
+    try {
+      await user?.verifyBeforeUpdateEmail(newEmail);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Đã gửi email xác minh. Hãy xác minh để hoàn tất.")),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        await reauthenticateAndRetryEmailChange(newEmail);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi: \${e.message}")));
+      }
+    }
+  }
 
-              if (shouldLeave == true) {
-                Navigator.pop(context);
-              }
-            },
+  Future<void> reauthenticateAndRetryEmailChange(String newEmail) async {
+    final passwordController = TextEditingController();
+    final email = user?.email;
 
-          ),
+    bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Xác minh lại"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Nhập lại mật khẩu để xác minh:"),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "Mật khẩu"),
+            ),
+          ],
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Hủy")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text("Xác nhận")),
+        ],
+      ),
+    );
 
-        body: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    if (confirmed == true) {
+      try {
+        final cred = EmailAuthProvider.credential(
+          email: email!,
+          password: passwordController.text.trim(),
+        );
+        await user?.reauthenticateWithCredential(cred);
+        await user?.verifyBeforeUpdateEmail(newEmail);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Đã gửi email xác minh đến địa chỉ mới.")),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi: $e")));
+      }
+    }
+  }
+
+  Future<void> changePassword() async {
+    final currentPassword = currentPasswordController.text.trim();
+    final newPassword = newPasswordController.text.trim();
+
+    if (currentPassword.isEmpty || newPassword.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Vui lòng nhập đầy đủ mật khẩu hiện tại và mới.")),
+      );
+      return;
+    }
+
+    try {
+      final cred = EmailAuthProvider.credential(
+        email: user!.email!,
+        password: currentPassword,
+      );
+      await user!.reauthenticateWithCredential(cred);
+      await user!.updatePassword(newPassword);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Đổi mật khẩu thành công.")),
+      );
+
+      currentPasswordController.clear();
+      newPasswordController.clear();
+    } on FirebaseAuthException catch (e) {
+      String msg = "Lỗi đổi mật khẩu.";
+      if (e.code == 'wrong-password') msg = "Mật khẩu hiện tại không đúng.";
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi: $e")));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final email = user?.email ?? '(Không có)';
+    final phone = user?.phoneNumber ?? '(Không có)';
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.green,
+        title: const Text("Chỉnh sửa hồ sơ", style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Center(
               child: CircleAvatar(
@@ -159,7 +212,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     : null,
               ),
             ),
-
             const SizedBox(height: 16),
             TextField(
               controller: photoUrlController,
@@ -173,13 +225,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             const SizedBox(height: 24),
             const Text("Thông tin tài khoản", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             const Divider(),
-            const SizedBox(height: 4),
-            Text("📧 Email: $email", style: const TextStyle(fontSize: 16)),
+            Text("📧 Email hiện tại: $email", style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: emailChangeController,
+              decoration: const InputDecoration(labelText: "Email mới"),
+              keyboardType: TextInputType.emailAddress,
+            ),
+            ElevatedButton.icon(
+              onPressed: changeEmail,
+              icon: const Icon(Icons.email),
+              label: const Text("Đổi email"),
+            ),
             const SizedBox(height: 10),
             Text("📱 Số điện thoại: $phone", style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 24),
+            const Divider(height: 32),
+            const Text("Đổi mật khẩu", style: TextStyle(fontWeight: FontWeight.bold)),
+            TextField(
+              controller: currentPasswordController,
+              decoration: const InputDecoration(labelText: "Mật khẩu hiện tại"),
+              obscureText: true,
+            ),
+            TextField(
+              controller: newPasswordController,
+              decoration: const InputDecoration(labelText: "Mật khẩu mới"),
+              obscureText: true,
+            ),
+            ElevatedButton.icon(
+              onPressed: changePassword,
+              icon: const Icon(Icons.lock),
+              label: const Text("Đổi mật khẩu"),
+            ),
+            const Divider(height: 32),
             const Text("Thông tin học sinh", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const Divider(),
             const SizedBox(height: 8),
             TextField(
               controller: nameController,
@@ -201,7 +279,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               onPressed: saveChanges,
               icon: const Icon(Icons.save),
               label: const Text("Lưu thay đổi"),
-            )
+            ),
           ],
         ),
       ),

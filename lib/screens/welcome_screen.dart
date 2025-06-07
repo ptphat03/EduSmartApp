@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'student_info_screen.dart';
+import 'user_info_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -32,7 +33,7 @@ class WelcomeScreen extends StatelessWidget {
                 onPressed: () {
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => const StudentInfoScreen()),
+                    MaterialPageRoute(builder: (_) => const UserInfoScreen()),
                   );
                 },
               ),
