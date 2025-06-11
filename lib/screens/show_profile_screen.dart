@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'edit_profile_screen.dart'; // import trang chỉnh sửa
+import 'edit_profile_screen.dart';
+import 'package:intl/intl.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -11,12 +12,31 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final user = FirebaseAuth.instance.currentUser;
-
-  String name = '';
-  String phone = '';
-  String school = '';
+  Map<String, dynamic>? userInfo;
+  List<Map<String, dynamic>> students = [];
   bool isLoading = true;
+
+  Widget buildInfoRow(String label, dynamic value) {
+    final text = value?.toString().trim();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "$label: ",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          Expanded(
+            child: Text(
+              (text != null && text.isNotEmpty) ? text : "(Chưa có)",
+              style: const TextStyle(fontSize: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -25,40 +45,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> loadUserData() async {
-    if (user == null) return;
-
-    final doc = await FirebaseFirestore.instance
-        .collection('students')
-        .doc(user!.uid)
-        .get();
-
-    final data = doc.data();
-    if (data != null) {
-      name = data['name'] ?? '';
-      phone = data['phone'] ?? '';
-      school = data['school'] ?? '';
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không tìm thấy người dùng!')),
+      );
+      return;
     }
 
-    setState(() => isLoading = false);
+    try {
+      final db = FirebaseFirestore.instance;
+
+      final userDoc = await db.collection('users').doc(user.uid).get();
+      final studentSnapshot = await db
+          .collection('users')
+          .doc(user.uid)
+          .collection('students')
+          .get();
+
+      final userData = userDoc.data() ?? {};
+      final studentList = studentSnapshot.docs.map((doc) => doc.data()).toList();
+
+      setState(() {
+        userInfo = userData;
+        students = studentList;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không thể tải dữ liệu.')),
+      );
+      debugPrint("Lỗi khi tải dữ liệu: $e");
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
-    final photoURL = user?.photoURL;
-
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.green,
-        iconTheme: const IconThemeData(color: Colors.white),
-        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+        backgroundColor: Colors.blue.shade700,
         title: const Text("Hồ sơ cá nhân"),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
         actions: [
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (value) {
               if (value == 'refresh') {
                 setState(() => isLoading = true);
@@ -73,23 +104,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             itemBuilder: (context) => [
               const PopupMenuItem<String>(
                 value: 'edit',
-                child: Row(
-                  children: [
-                    Icon(Icons.edit, size: 20, color: Colors.black),
-                    SizedBox(width: 8),
-                    Text("Chỉnh sửa"),
-                  ],
-                ),
+                child: Text("Chỉnh sửa"),
               ),
               const PopupMenuItem<String>(
                 value: 'refresh',
-                child: Row(
-                  children: [
-                    Icon(Icons.refresh, size: 20, color: Colors.black),
-                    SizedBox(width: 8),
-                    Text("Tải lại"),
-                  ],
-                ),
+                child: Text("Tải lại"),
               ),
             ],
           ),
@@ -98,7 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -106,52 +125,80 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: CircleAvatar(
                 radius: 60,
                 backgroundColor: Colors.grey[200],
-                backgroundImage: (photoURL != null && photoURL.isNotEmpty)
-                    ? NetworkImage(photoURL)
-                    : null,
-                child: (photoURL == null || photoURL.isEmpty)
-                    ? const Icon(Icons.person, size: 60, color: Colors.grey)
-                    : null,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: Text(
+                (userInfo?['user_display_name']?.toString().trim().isNotEmpty ?? false)
+                    ? userInfo!['user_display_name']
+                    : 'Chưa đặt tên',
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    buildInfoRow("Email", userInfo?['user_name'] ?? '(Chưa có)'),
+                    buildInfoRow("SĐT", userInfo?['user_phone']),
+                    buildInfoRow("Giới tính", userInfo?['user_gender']),
+                    buildInfoRow(
+                      "Ngày sinh",
+                      (() {
+                        final timestamp = userInfo?['user_dob'];
+                        if (timestamp == null) return '(Chưa có)';
+                        try {
+                          final date = (timestamp as Timestamp).toDate();
+                          return DateFormat('dd/MM/yyyy').format(date);
+                        } catch (_) {
+                          return '(Lỗi định dạng)';
+                        }
+                      })(),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            Center(
-              child: Text(
-                user?.displayName ?? 'Chưa đặt tên',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            ...students.map((student) => Card(
+              margin: const EdgeInsets.only(bottom: 16),
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("🎓 Thông tin học sinh", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const Divider(),
+                    buildInfoRow("Họ tên", student['student_name']),
+                    buildInfoRow("Giới tính", student['student_gender']),
+                    buildInfoRow(
+                      "Ngày sinh",
+                      (() {
+                        final timestamp = student['student_dob'];
+                        if (timestamp == null) return '(Chưa có)';
+                        try {
+                          final date = (timestamp as Timestamp).toDate();
+                          return DateFormat('dd/MM/yyyy').format(date);
+                        } catch (_) {
+                          return '(Lỗi định dạng)';
+                        }
+                      })(),
+                    ),
+                    buildInfoRow("SĐT", student['student_phone']),
+                    buildInfoRow("Trường", student['student_school']),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            const Text("Thông tin tài khoản", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const Divider(),
-            const SizedBox(height: 4),
-            Text.rich(TextSpan(children: [
-              const TextSpan(text: "📧 Email: ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              TextSpan(text: user?.email ?? '(Không có)', style: const TextStyle(fontSize: 16)),
-            ])),
-            const SizedBox(height: 10),
-            Text.rich(TextSpan(children: [
-              const TextSpan(text: "📱 Số điện thoại: ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              TextSpan(text: user?.phoneNumber ?? '(Không có)', style: const TextStyle(fontSize: 16)),
-            ])),
-            const SizedBox(height: 24),
-            const Text("Thông tin học sinh", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const Divider(),
-            const SizedBox(height: 8),
-            Text.rich(TextSpan(children: [
-              const TextSpan(text: "👤 Họ tên: ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              TextSpan(text: name.isNotEmpty ? name : "(Chưa có)", style: const TextStyle(fontSize: 16)),
-            ])),
-            const SizedBox(height: 8),
-            Text.rich(TextSpan(children: [
-              const TextSpan(text: "🏫 Trường: ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              TextSpan(text: school.isNotEmpty ? school : "(Chưa có)", style: const TextStyle(fontSize: 16)),
-            ])),
-            const SizedBox(height: 8),
-            Text.rich(TextSpan(children: [
-              const TextSpan(text: "📞 SĐT học sinh: ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              TextSpan(text: phone.isNotEmpty ? phone : "(Chưa có)", style: const TextStyle(fontSize: 16)),
-            ])),
+            )),
+
           ],
         ),
       ),

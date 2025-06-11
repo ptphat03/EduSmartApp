@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -10,75 +11,121 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  final _formKey = GlobalKey<FormState>();
   final user = FirebaseAuth.instance.currentUser;
+  bool isLoading = true;
+  bool _editingEmail = false;
+  final emailChangeController = TextEditingController();
 
   final displayNameController = TextEditingController();
-  final photoUrlController = TextEditingController();
-
-  final nameController = TextEditingController();
-  final schoolController = TextEditingController();
   final phoneController = TextEditingController();
-
-  final emailChangeController = TextEditingController();
-  final currentPasswordController = TextEditingController();
-  final newPasswordController = TextEditingController();
-
-  bool isLoading = true;
+  final genderController = TextEditingController();
+  final dobController = TextEditingController();
+  DateTime? userDob;
+  String userName = '';
+  List<Map<String, dynamic>> students = [];
 
   @override
   void initState() {
     super.initState();
-    loadUserData();
+    loadData();
   }
 
-  Future<void> loadUserData() async {
-    if (user == null) return;
-
-    displayNameController.text = user!.displayName ?? '';
-    photoUrlController.text = user!.photoURL ?? '';
-
-    final doc = await FirebaseFirestore.instance
-        .collection('students')
-        .doc(user!.uid)
-        .get();
-
-    final data = doc.data();
-    if (data != null) {
-      nameController.text = data['name'] ?? '';
-      schoolController.text = data['school'] ?? '';
-      phoneController.text = data['phone'] ?? '';
-    }
-
-    setState(() => isLoading = false);
-  }
-
-  Future<void> saveChanges() async {
-    if (user == null) return;
+  Future<void> loadData() async {
+    final uid = user?.uid;
+    if (uid == null) return;
 
     try {
-      await user!.updateDisplayName(displayNameController.text.trim());
-      await user!.updatePhotoURL(photoUrlController.text.trim());
-      await user!.reload();
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final userData = userDoc.data() ?? {};
 
-      await FirebaseFirestore.instance
+      displayNameController.text = userData['user_display_name'] ?? '';
+      phoneController.text = userData['user_phone'] ?? '';
+      genderController.text = userData['user_gender'] ?? '';
+      userName = userData['user_name'] ?? '';
+      final rawUserDob = userData['user_dob'];
+      if (rawUserDob is Timestamp) {
+        userDob = rawUserDob.toDate();
+        dobController.text = DateFormat('dd/MM/yyyy').format(userDob!);
+      }
+
+      final studentDocs = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
           .collection('students')
-          .doc(user!.uid)
-          .set({
-        'name': nameController.text.trim(),
-        'school': schoolController.text.trim(),
-        'phone': phoneController.text.trim(),
-        'updatedAt': FieldValue.serverTimestamp(),
+          .get();
+
+      students = studentDocs.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          'name': TextEditingController(text: data['student_name']),
+          'phone': TextEditingController(text: data['student_phone']),
+          'gender': TextEditingController(text: data['student_gender']),
+          'dob': TextEditingController(
+              text: data['student_dob'] != null
+                  ? DateFormat('dd/MM/yyyy').format((data['student_dob'] as Timestamp).toDate())
+                  : ''),
+          'dob_raw': data['student_dob'] != null ? (data['student_dob'] as Timestamp).toDate() : null,
+          'school': TextEditingController(text: data['student_school']),
+        };
+      }).toList();
+
+      setState(() => isLoading = false);
+    } catch (e) {
+      debugPrint("Lỗi tải dữ liệu: $e");
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> saveData() async {
+    if (!_formKey.currentState!.validate()) return;
+    final uid = user?.uid;
+    if (uid == null) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'user_display_name': displayNameController.text.trim(),
+        'user_phone': phoneController.text.trim(),
+        'user_gender': genderController.text.trim(),
+        'user_dob': userDob != null ? Timestamp.fromDate(userDob!) : null,
       }, SetOptions(merge: true));
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Cập nhật thành công!")),
-      );
+      final studentsRef = FirebaseFirestore.instance.collection('users').doc(uid).collection('students');
 
-      Navigator.pop(context);
+      for (var student in students) {
+        await studentsRef.doc(student['id']).set({
+          'student_name': student['name'].text.trim(),
+          'student_phone': student['phone'].text.trim(),
+          'student_gender': student['gender'].text.trim(),
+          'student_dob': student['dob_raw'] != null ? Timestamp.fromDate(student['dob_raw']) : null,
+          'student_school': student['school'].text.trim(),
+        }, SetOptions(merge: true));
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Cập nhật thành công")));
+        Navigator.pop(context);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Lỗi: $e")),
-      );
+      debugPrint("Lỗi khi lưu: $e");
+    }
+  }
+
+  Future<void> pickDate(
+      BuildContext context,
+      TextEditingController controller,
+      void Function(DateTime) onPicked,
+      ) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(2010),
+      firstDate: DateTime(1990),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      controller.text = DateFormat('dd/MM/yyyy').format(picked);
+      onPicked(picked);
     }
   }
 
@@ -93,14 +140,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     try {
       await user?.verifyBeforeUpdateEmail(newEmail);
+
+      final uid = user?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'user_name': newEmail,
+        }, SetOptions(merge: true));
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Đã gửi email xác minh. Hãy xác minh để hoàn tất.")),
       );
+      emailChangeController.clear();
+      loadData();
     } on FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
         await reauthenticateAndRetryEmailChange(newEmail);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi: \${e.message}")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi: ${e.message}")));
       }
     }
   }
@@ -142,145 +199,116 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Đã gửi email xác minh đến địa chỉ mới.")),
         );
+        emailChangeController.clear();
+        loadData();
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi: $e")));
       }
     }
   }
 
-  Future<void> changePassword() async {
-    final currentPassword = currentPasswordController.text.trim();
-    final newPassword = newPasswordController.text.trim();
-
-    if (currentPassword.isEmpty || newPassword.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Vui lòng nhập đầy đủ mật khẩu hiện tại và mới.")),
-      );
-      return;
-    }
-
-    try {
-      final cred = EmailAuthProvider.credential(
-        email: user!.email!,
-        password: currentPassword,
-      );
-      await user!.reauthenticateWithCredential(cred);
-      await user!.updatePassword(newPassword);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Đổi mật khẩu thành công.")),
-      );
-
-      currentPasswordController.clear();
-      newPasswordController.clear();
-    } on FirebaseAuthException catch (e) {
-      String msg = "Lỗi đổi mật khẩu.";
-      if (e.code == 'wrong-password') msg = "Mật khẩu hiện tại không đúng.";
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi: $e")));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final email = user?.email ?? '(Không có)';
-    final phone = user?.phoneNumber ?? '(Không có)';
-
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.green,
-        title: const Text("Chỉnh sửa hồ sơ", style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text("Chỉnh sửa hồ sơ"),
+        actions: [
+          IconButton(onPressed: saveData, icon: const Icon(Icons.save)),
+        ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: CircleAvatar(
-                radius: 60,
-                backgroundColor: Colors.grey[200],
-                backgroundImage: (photoUrlController.text.isNotEmpty)
-                    ? NetworkImage(photoUrlController.text)
-                    : null,
-                child: (photoUrlController.text.isEmpty)
-                    ? const Icon(Icons.person, size: 60, color: Colors.grey)
-                    : null,
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text("Thông tin người dùng", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              TextFormField(controller: displayNameController, decoration: const InputDecoration(labelText: 'Tên hiển thị')),
+              TextFormField(controller: phoneController, decoration: const InputDecoration(labelText: 'SĐT')),
+              TextFormField(controller: genderController, decoration: const InputDecoration(labelText: 'Giới tính')),
+              TextFormField(
+                controller: dobController,
+                readOnly: true,
+                decoration: const InputDecoration(labelText: 'Ngày sinh'),
+                onTap: () => pickDate(context, dobController, (d) => userDob = d),
               ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: photoUrlController,
-              decoration: const InputDecoration(labelText: "URL ảnh đại diện"),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: displayNameController,
-              decoration: const InputDecoration(labelText: "Tên hiển thị"),
-            ),
-            const SizedBox(height: 24),
-            const Text("Thông tin tài khoản", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const Divider(),
-            Text("📧 Email hiện tại: $email", style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 10),
-            TextField(
-              controller: emailChangeController,
-              decoration: const InputDecoration(labelText: "Email mới"),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            ElevatedButton.icon(
-              onPressed: changeEmail,
-              icon: const Icon(Icons.email),
-              label: const Text("Đổi email"),
-            ),
-            const SizedBox(height: 10),
-            Text("📱 Số điện thoại: $phone", style: const TextStyle(fontSize: 16)),
-            const Divider(height: 32),
-            const Text("Đổi mật khẩu", style: TextStyle(fontWeight: FontWeight.bold)),
-            TextField(
-              controller: currentPasswordController,
-              decoration: const InputDecoration(labelText: "Mật khẩu hiện tại"),
-              obscureText: true,
-            ),
-            TextField(
-              controller: newPasswordController,
-              decoration: const InputDecoration(labelText: "Mật khẩu mới"),
-              obscureText: true,
-            ),
-            ElevatedButton.icon(
-              onPressed: changePassword,
-              icon: const Icon(Icons.lock),
-              label: const Text("Đổi mật khẩu"),
-            ),
-            const Divider(height: 32),
-            const Text("Thông tin học sinh", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: "Họ tên"),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: schoolController,
-              decoration: const InputDecoration(labelText: "Trường"),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: phoneController,
-              decoration: const InputDecoration(labelText: "SĐT học sinh"),
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: saveChanges,
-              icon: const Icon(Icons.save),
-              label: const Text("Lưu thay đổi"),
-            ),
-          ],
+              TextFormField(
+                initialValue: userName,
+                readOnly: true,
+                decoration: const InputDecoration(labelText: "Email hiện tại"),
+              ),
+              const SizedBox(height: 10),
+              if (_editingEmail) ...[
+                TextField(
+                  controller: emailChangeController,
+                  decoration: const InputDecoration(labelText: "Email mới"),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          changeEmail();
+                          setState(() => _editingEmail = false);
+                        },
+                        icon: const Icon(Icons.check),
+                        label: const Text("Xác nhận"),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          emailChangeController.clear();
+                          setState(() => _editingEmail = false);
+                        },
+                        icon: const Icon(Icons.cancel),
+                        label: const Text("Huỷ"),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                ElevatedButton.icon(
+                  onPressed: () => setState(() => _editingEmail = true),
+                  icon: const Icon(Icons.email),
+                  label: const Text("Đổi email"),
+                ),
+              ],
+              const SizedBox(height: 24),
+              const Text("Thông tin học sinh", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              ...students.map((student) {
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        TextFormField(controller: student['name'], decoration: const InputDecoration(labelText: 'Tên học sinh')),
+                        TextFormField(controller: student['phone'], decoration: const InputDecoration(labelText: 'SĐT')),
+                        TextFormField(controller: student['gender'], decoration: const InputDecoration(labelText: 'Giới tính')),
+                        TextFormField(
+                          controller: student['dob'],
+                          readOnly: true,
+                          decoration: const InputDecoration(labelText: 'Ngày sinh'),
+                          onTap: () => pickDate(context, student['dob'], (picked) {
+                            student['dob_raw'] = picked;
+                          }),
+                        ),
+                        TextFormField(controller: student['school'], decoration: const InputDecoration(labelText: 'Trường học')),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
         ),
       ),
     );

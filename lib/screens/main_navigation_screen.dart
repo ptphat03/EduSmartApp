@@ -45,7 +45,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         currentIndex: _currentIndex,
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white70,
-        backgroundColor: Colors.green[700],
+        backgroundColor: Colors.blue[700],
         type: BottomNavigationBarType.fixed,
         selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
         onTap: (index) {

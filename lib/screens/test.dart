@@ -1,137 +1,176 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'phone_otp_screen.dart';
-import 'student_info_screen.dart';
+import '../widgets/custom_app_bar.dart';
 
-class UserInfoScreen extends StatefulWidget {
-  const UserInfoScreen({super.key});
+class EditableScheduleScreen extends StatefulWidget {
+  const EditableScheduleScreen({super.key});
 
   @override
-  State<UserInfoScreen> createState() => _UserInfoScreenState();
+  State<EditableScheduleScreen> createState() => _EditableScheduleScreenState();
 }
 
-class _UserInfoScreenState extends State<UserInfoScreen> {
-  final phoneNumberController = TextEditingController();
-  bool isLoading = false;
+class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
+  final List<String> days = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+  final List<String> sessions = ['Sáng', 'Chiều'];
 
-  Future<void> sendOTP() async {
-    final rawPhone = phoneNumberController.text.trim();
+  int selectedStudentIndex = 0;
 
-    if (rawPhone.isEmpty) {
-      // Nếu không nhập thì bỏ qua
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const StudentInfoScreen()),
-      );
-      return;
-    }
+  final List<Student> students = [
+    Student.withDefaultSchedule('Nguyễn Văn A', {
+      'T2': {
+        'Sáng': ['Toán', 'Văn'],
+        'Chiều': ['Tiếng Anh']
+      },
+      'T3': {
+        'Sáng': ['Lý'],
+        'Chiều': []
+      },
+      'T4': {
+        'Sáng': ['Hóa'],
+        'Chiều': ['Tin học']
+      },
+    }),
+    Student.withDefaultSchedule('Trần Thị B'),
+  ];
 
-    // Chuẩn hóa số điện thoại về định dạng E.164 (ví dụ: 0912345678 => +84912345678)
-    String phone = rawPhone;
-    if (phone.startsWith('0')) {
-      phone = '+84${phone.substring(1)}';
-    } else if (!phone.startsWith('+')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Vui lòng nhập số theo định dạng chuẩn (+84...)")),
-      );
-      return;
-    }
+  void _editSubjects(String day, String session) {
+    final student = students[selectedStudentIndex];
+    final controller = TextEditingController(
+      text: student.schedule[day]![session]!.join(', '),
+    );
 
-    setState(() => isLoading = true);
-
-    try {
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: phone,
-        verificationCompleted: (_) {}, // không dùng tự động
-        verificationFailed: (FirebaseAuthException e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Lỗi xác minh: ${e.message}")),
-          );
-          setState(() => isLoading = false);
-        },
-        codeSent: (String verificationId, int? resendToken) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PhoneOTPScreen(
-                phoneNumber: phone,
-                verificationId: verificationId,
-              ),
-            ),
-          );
-        },
-        codeAutoRetrievalTimeout: (_) {},
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Lỗi: $e")),
-      );
-      setState(() => isLoading = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    phoneNumberController.dispose();
-    super.dispose();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('📝 $day - $session'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Nhập các môn (cách nhau bằng dấu phẩy)',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                student.schedule[day]![session] =
+                    controller.text.split(',').map((e) => e.trim()).toList();
+              });
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Lưu'),
+          )
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final student = students[selectedStudentIndex];
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Thêm số điện thoại"),
-        backgroundColor: Colors.green,
-        iconTheme: const IconThemeData(color: Colors.white),
-        titleTextStyle: const TextStyle(
-            color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Nhập số điện thoại của bạn để xác minh (có thể bỏ qua):",
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phoneNumberController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Số điện thoại (VD: 0912345678)',
-                border: OutlineInputBorder(),
+      // appBar: buildCustomAppBar("Thời khóa biểu", Icons.calendar_month),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: DropdownButtonFormField<int>(
+              value: selectedStudentIndex,
+              decoration: InputDecoration(
+                labelText: 'Chọn học sinh',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
+              items: List.generate(
+                students.length,
+                    (index) => DropdownMenuItem(
+                  value: index,
+                  child: Text(students[index].name),
+                ),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  selectedStudentIndex = value!;
+                });
+              },
             ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: sendOTP,
-                    icon: const Icon(Icons.send),
-                    label: const Text("Gửi OTP"),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: days.length,
+              padding: const EdgeInsets.all(12),
+              itemBuilder: (context, index) {
+                final day = days[index];
+                return Card(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("📅 $day", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        const SizedBox(height: 8),
+                        ...sessions.map((session) {
+                          final subjects = student.schedule[day]![session]!;
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text("🕒 $session"),
+                            subtitle: subjects.isEmpty
+                                ? const Text("— (chưa có môn)", style: TextStyle(color: Colors.grey))
+                                : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: subjects.map((s) => Text("• $s")).toList(),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.green),
+                              onPressed: () => _editSubjects(day, session),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const StudentInfoScreen()),
-                    );
-                  },
-                  child: const Text("Bỏ qua"),
-                ),
-              ],
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+}
+
+class Student {
+  final String name;
+  final Map<String, Map<String, List<String>>> schedule;
+
+  Student({required this.name, required this.schedule});
+
+  factory Student.withDefaultSchedule(String name, [Map<String, Map<String, List<String>>>? init]) {
+    final Map<String, Map<String, List<String>>> defaultSchedule = {
+      for (var day in ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'])
+        day: {
+          'Sáng': [],
+          'Chiều': [],
+        }
+    };
+
+    if (init != null) {
+      for (var day in init.keys) {
+        defaultSchedule[day] = {
+          'Sáng': init[day]?['Sáng'] ?? [],
+          'Chiều': init[day]?['Chiều'] ?? [],
+        };
+      }
+    }
+
+    return Student(name: name, schedule: defaultSchedule);
   }
 }
