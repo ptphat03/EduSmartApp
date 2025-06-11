@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'phone_otp_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'student_info_screen.dart';
-
+import 'welcome_screen.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/services.dart'; // thêm dòng này ở đầu
 class UserInfoScreen extends StatefulWidget {
   const UserInfoScreen({super.key});
 
@@ -11,108 +13,206 @@ class UserInfoScreen extends StatefulWidget {
 }
 
 class _UserInfoScreenState extends State<UserInfoScreen> {
-  final user = FirebaseAuth.instance.currentUser;
-
   final displayNameController = TextEditingController();
-  final phoneNumberController = TextEditingController();
+  final nameController = TextEditingController();
+  final phoneController = TextEditingController();
+  final dobController = TextEditingController();
+  DateTime? selectedDob;
+  String gender = 'Nam';
   bool isLoading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    if (user != null) {
-      displayNameController.text = user!.displayName ?? '';
-      phoneNumberController.text = user!.phoneNumber ?? '';
-    }
-  }
+  Future<void> saveUserInfo() async {
+    final phone = phoneController.text.trim();
+    final display_name = displayNameController.text.trim();
 
-  Future<void> sendOtpToPhone() async {
-    final phone = phoneNumberController.text.trim();
-
-    // Đảm bảo số bắt đầu bằng dấu + và đúng chuẩn quốc tế
-    if (!RegExp(r'^\+?[1-9]\d{7,14}$').hasMatch(phone)) {
+    if (display_name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Số điện thoại không đúng định dạng quốc tế (+84...)")),
+        const SnackBar(content: Text('Vui lòng điền đầy đủ thông tin.')),
+      );
+      return;
+
+    }
+    if (selectedDob == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ngày sinh không đúng định dạng dd/MM/yyyy.')),
       );
       return;
     }
 
     setState(() => isLoading = true);
+    final user = FirebaseAuth.instance.currentUser;
 
-    await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: phone,
-      verificationCompleted: (PhoneAuthCredential credential) {},
-      verificationFailed: (FirebaseAuthException e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Lỗi xác minh: ${e.message}")),
-        );
-        setState(() => isLoading = false);
-      },
-      codeSent: (String verificationId, int? resendToken) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PhoneOTPScreen(
-              phoneNumber: phone,
-              verificationId: verificationId,
-            ),
-          ),
-        );
-      },
-      codeAutoRetrievalTimeout: (String verificationId) {},
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không tìm thấy người dùng!')),
+      );
+      setState(() => isLoading = false);
+      return;
+    }
+
+    final data = {
+      'uid': user.uid,
+      'user_name': user.email ?? '',
+      'user_phone': phone,
+      'user_display_name': display_name,
+      'user_gender': gender,
+      'user_dob': Timestamp.fromDate(selectedDob!),
+    };
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(data, SetOptions(merge: true));
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const StudentInfoScreen()),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi lưu dữ liệu: $e')),
+      );
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+  Future<void> selectDate(BuildContext context) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(2010, 1, 1),
+      firstDate: DateTime(1990),
+      lastDate: DateTime.now(),
     );
+    if (picked != null) {
+      setState(() {
+        selectedDob = picked;
+        dobController.text = DateFormat('dd/MM/yyyy').format(picked);
+      });
+    }
+  }
+
+  void handleDobInput(String value) {
+    try {
+      final parts = value.split('/');
+      if (parts.length == 3) {
+        final day = int.parse(parts[0]);
+        final month = int.parse(parts[1]);
+        final year = int.parse(parts[2]);
+        final parsed = DateTime(year, month, day);
+        if (parsed.isBefore(DateTime.now())) {
+          setState(() => selectedDob = parsed);
+        }
+      }
+    } catch (_) {
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.blue[50],
       appBar: AppBar(
-        title: const Text("Số điện thoại"),
-        backgroundColor: Colors.green,
-        iconTheme: const IconThemeData(color: Colors.white),
-        titleTextStyle: const TextStyle(
-            color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+        title: const Text("Thông tin người dùng"),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+              );
+            },
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: phoneNumberController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Số điện thoại (vd: +84981234567)',
-                border: OutlineInputBorder(),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Card(
+            elevation: 6,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Text(
+                    "Điền thông tin của bạn",
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[800],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: displayNameController,
+                    decoration: const InputDecoration(
+                      labelText: "Họ tên",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneController,
+                    decoration: const InputDecoration(
+                      labelText: "Số điện thoại",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.phone),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly, // Chỉ cho phép nhập 0–9
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: dobController,
+                    keyboardType: TextInputType.datetime,
+                    decoration: InputDecoration(
+                      labelText: 'Ngày sinh (dd/MM/yyyy)',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.cake),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.calendar_today),
+                        onPressed: () => selectDate(context),
+                      ),
+                    ),
+                    onChanged: handleDobInput,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: gender,
+                    decoration: const InputDecoration(
+                      labelText: "Giới tính",
+                      border: OutlineInputBorder(),
+                    ),
+                    items: ['Nam', 'Nữ', 'Khác']
+                        .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                        .toList(),
+                    onChanged: (value) => setState(() => gender = value ?? 'Nam'),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : ElevatedButton.icon(
+                      icon: const Icon(Icons.save),
+                      label: const Text("Lưu & Tiếp tục"),
+                      onPressed: saveUserInfo,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: sendOtpToPhone,
-                    icon: const Icon(Icons.send),
-                    label: const Text("Gửi mã OTP"),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const StudentInfoScreen(),
-                      ),
-                    );
-                  },
-                  child: const Text("Bỏ qua"),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

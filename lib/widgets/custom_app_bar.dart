@@ -10,12 +10,12 @@ PreferredSizeWidget buildCustomAppBar(
     automaticallyImplyLeading: false,
     centerTitle: true,
     elevation: 4,
-    backgroundColor: Colors.green.shade700,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(
-        bottom: Radius.circular(16),
-      ),
-    ),
+    backgroundColor: Colors.blue.shade700,
+    // shape: const RoundedRectangleBorder(
+    //   borderRadius: BorderRadius.vertical(
+    //     bottom: Radius.circular(16),
+    //   ),
+    // ),
     leading: showBack && context != null
         ? IconButton(
       icon: const Icon(Icons.arrow_back, color: Colors.white),
