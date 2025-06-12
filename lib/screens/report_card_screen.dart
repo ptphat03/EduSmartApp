@@ -1,5 +1,7 @@
+// File: report_card_screen.dart
 import 'package:flutter/material.dart';
-import '../widgets/custom_app_bar.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ReportCardScreen extends StatefulWidget {
   const ReportCardScreen({super.key});
@@ -9,222 +11,391 @@ class ReportCardScreen extends StatefulWidget {
 }
 
 class _ReportCardScreenState extends State<ReportCardScreen> {
-  int _selectedStudentIndex = 0;
+  bool isLoading = true;
+  List<Student> students = [];
+  List<Map<String, dynamic>> allSubjects = [];
+  Map<String, Map<String, dynamic>> gradeGroups = {};
+  String? selectedStudentId;
+  List<Map<String, dynamic>> studentSubjects = [];
 
-  final List<Student> students = [
-    Student(name: "Nguyễn Văn A - Lớp 5A2", grades: [
-      SubjectGrade(subject: "Toán", midterm: 8.5, finalExam: 9.0),
-      SubjectGrade(subject: "Văn", midterm: 7.0, finalExam: 8.0),
-      SubjectGrade(subject: "Tiếng Anh", midterm: 9.0, finalExam: 9.5),
-      SubjectGrade(subject: "Lý", midterm: 6.5, finalExam: 7.5),
-      SubjectGrade(subject: "Hóa", midterm: 7.5, finalExam: 8.0),
-    ]),
-    Student(name: "Trần Thị B - Lớp 4A1", grades: [
-      SubjectGrade(subject: "Toán", midterm: 9.0, finalExam: 9.5),
-      SubjectGrade(subject: "Văn", midterm: 8.0, finalExam: 8.5),
-    ]),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    loadAllData();
+  }
 
-  final _subjectController = TextEditingController();
-  final _midtermController = TextEditingController();
-  final _finalController = TextEditingController();
+  Student? get selectedStudent => students.firstWhere(
+        (s) => s.id == selectedStudentId,
+    orElse: () => Student(id: '', name: '', grades: {}),
+  );
 
-  void _addSubject() {
-    final subject = _subjectController.text.trim();
-    final mid = double.tryParse(_midtermController.text.trim());
-    final fin = double.tryParse(_finalController.text.trim());
+  Future<void> loadAllData() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
 
-    if (subject.isNotEmpty && mid != null && fin != null) {
-      setState(() {
-        students[_selectedStudentIndex].grades.add(
-          SubjectGrade(subject: subject, midterm: mid, finalExam: fin),
-        );
-      });
-      _subjectController.clear();
-      _midtermController.clear();
-      _finalController.clear();
-      Navigator.pop(context);
+    final studentsSnap = await FirebaseFirestore.instance.collection('users').doc(uid).collection('students').get();
+    final gradeGroupSnap = await FirebaseFirestore.instance.collection('gradeGroups').get();
+
+    students = studentsSnap.docs.map((doc) {
+      final data = doc.data();
+      return Student(
+        id: doc.id,
+        name: data['student_name'] ?? 'Không tên',
+        grades: Map<String, dynamic>.from(data['grades'] ?? {}),
+      );
+    }).toList();
+
+    for (var doc in gradeGroupSnap.docs) {
+      gradeGroups[doc.id] = doc.data();
     }
+
+    if (students.isNotEmpty) {
+      selectedStudentId = students.first.id;
+      await loadStudentSubjects();
+    }
+
+    setState(() => isLoading = false);
+  }
+
+  Future<void> loadStudentSubjects() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || selectedStudentId == null) return;
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('students')
+        .doc(selectedStudentId)
+        .collection('subjects')
+        .get();
+    studentSubjects = snapshot.docs.map((doc) => {"id": doc.id, ...doc.data()}).toList();
+  }
+
+  void updateGrade(String studentId, String subject, String col, double value) async {
+    await FirebaseFirestore.instance.collection('users')
+        .doc(FirebaseAuth.instance.currentUser!.uid)
+        .collection('students').doc(studentId)
+        .set({"grades": {subject: {col: value}}}, SetOptions(merge: true));
+  }
+
+  Future<void> assignGradeGroup(String subjectId, String groupId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || selectedStudentId == null) return;
+
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('students')
+        .doc(selectedStudentId)
+        .collection('subjects')
+        .doc(subjectId)
+        .update({'gradeGroupId': groupId});
+
+    await loadStudentSubjects();
+    setState(() {});
+  }
+
+  Future<void> editGradeGroup(String groupId, Map<String, dynamic> currentData) async {
+    final nameController = TextEditingController(text: currentData['groupName']);
+    final columnsController = TextEditingController(text: (currentData['columns'] as List).join(', '));
+    final weightsController = TextEditingController(text: (currentData['weights'] as List).join(', '));
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Chỉnh sửa nhóm cột điểm'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Tên nhóm'),
+            ),
+            TextField(
+              controller: columnsController,
+              decoration: const InputDecoration(labelText: 'Tên các cột (phân cách bằng dấu phẩy)'),
+            ),
+            TextField(
+              controller: weightsController,
+              decoration: const InputDecoration(labelText: 'Trọng số tương ứng (phân cách bằng dấu phẩy)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Huỷ')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              final columns = columnsController.text.split(',').map((e) => e.trim()).toList();
+              final weights = weightsController.text.split(',').map((e) => num.tryParse(e.trim()) ?? 0).toList();
+
+              if (name.isNotEmpty && columns.isNotEmpty && columns.length == weights.length) {
+                await FirebaseFirestore.instance.collection('gradeGroups').doc(groupId).update({
+                  'groupName': name,
+                  'columns': columns,
+                  'weights': weights,
+                });
+                Navigator.pop(context);
+                await loadAllData();
+              }
+            },
+            child: const Text('Lưu'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> deleteGradeGroup(String groupId) async {
+    await FirebaseFirestore.instance.collection('gradeGroups').doc(groupId).delete();
+    await loadAllData();
+  }
+
+  Future<void> showAssignGroupDialog(String subjectId) async {
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Chọn nhóm cột điểm'),
+        content: DropdownButtonFormField<String>(
+          items: gradeGroups.entries.map((e) => DropdownMenuItem(
+            value: e.key,
+            child: Text(e.value['groupName']),
+          )).toList(),
+          onChanged: (groupId) {
+            if (groupId != null) {
+              assignGradeGroup(subjectId, groupId);
+              Navigator.pop(context);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> showAddGradeGroupDialog() async {
+    final nameController = TextEditingController();
+    final columnsController = TextEditingController();
+    final weightsController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Tạo nhóm cột điểm mới'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Tên nhóm'),
+            ),
+            TextField(
+              controller: columnsController,
+              decoration: const InputDecoration(labelText: 'Tên các cột (phân cách bằng dấu phẩy)'),
+            ),
+            TextField(
+              controller: weightsController,
+              decoration: const InputDecoration(labelText: 'Trọng số tương ứng (phân cách bằng dấu phẩy)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Huỷ')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              final columns = columnsController.text.split(',').map((e) => e.trim()).toList();
+              final weights = weightsController.text.split(',').map((e) => num.tryParse(e.trim()) ?? 0).toList();
+
+              if (name.isNotEmpty && columns.isNotEmpty && columns.length == weights.length) {
+                await FirebaseFirestore.instance.collection('gradeGroups').add({
+                  'groupName': name,
+                  'columns': columns,
+                  'weights': weights,
+                });
+                Navigator.pop(context);
+                await loadAllData();
+              }
+            },
+            child: const Text('Lưu'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final current = students[_selectedStudentIndex];
-
     return Scaffold(
-      //appBar: buildCustomAppBar("Bảng điểm", Icons.bar_chart),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.greenAccent, Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+      appBar: AppBar(
+        title: const Text("Bảng điểm"),
+        backgroundColor: Colors.blue.shade600,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_box_outlined),
+            tooltip: 'Tạo nhóm cột',
+            onPressed: showAddGradeGroupDialog,
           ),
-        ),
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            DropdownButtonFormField<int>(
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              value: _selectedStudentIndex,
-              items: List.generate(
-                students.length,
-                    (i) => DropdownMenuItem(
-                  value: i,
-                  child: Text(students[i].name),
-                ),
-              ),
-              onChanged: (val) => setState(() => _selectedStudentIndex = val!),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 6,
-                    offset: Offset(0, 2),
-                  )
-                ],
-              ),
-              child: Table(
-                border: TableBorder.all(color: Colors.grey.shade300),
-                columnWidths: const {
-                  0: FlexColumnWidth(2),
-                  1: FlexColumnWidth(1.5),
-                  2: FlexColumnWidth(1.5),
-                  3: FlexColumnWidth(1.5),
-                },
-                children: [
-                  const TableRow(
-                    decoration: BoxDecoration(color: Colors.lightGreen),
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Text("Môn học", style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Text("Giữa kỳ", style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Text("Cuối kỳ", style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Text("TB", style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                  ...current.grades.map((g) {
-                    final avg = ((g.midterm + g.finalExam) / 2).toStringAsFixed(1);
-                    return TableRow(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Text(g.subject),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: TextField(
-                            controller: TextEditingController(text: g.midterm.toString()),
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(border: InputBorder.none),
-                            onSubmitted: (val) => setState(() {
-                              g.midterm = double.tryParse(val) ?? g.midterm;
-                            }),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: TextField(
-                            controller: TextEditingController(text: g.finalExam.toString()),
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(border: InputBorder.none),
-                            onSubmitted: (val) => setState(() {
-                              g.finalExam = double.tryParse(val) ?? g.finalExam;
-                            }),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Text(avg),
-                        ),
-                      ],
-                    );
-                  }).toList(),
-                ],
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-              top: 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text("Thêm môn học", style: TextStyle(fontSize: 18)),
-                TextField(
-                  controller: _subjectController,
-                  decoration: const InputDecoration(labelText: "Môn học"),
-                ),
-                TextField(
-                  controller: _midtermController,
-                  decoration: const InputDecoration(labelText: "Điểm giữa kỳ"),
-                  keyboardType: TextInputType.number,
-                ),
-                TextField(
-                  controller: _finalController,
-                  decoration: const InputDecoration(labelText: "Điểm cuối kỳ"),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _addSubject,
-                  child: const Text("Lưu"),
-                )
-              ],
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: DropdownButtonFormField<String>(
+              value: selectedStudentId,
+              items: students.map((student) => DropdownMenuItem(
+                value: student.id,
+                child: Text(student.name),
+              )).toList(),
+              onChanged: (value) async {
+                selectedStudentId = value;
+                await loadStudentSubjects();
+                setState(() {});
+              },
+              decoration: const InputDecoration(labelText: 'Chọn học sinh'),
             ),
           ),
-        ),
-        backgroundColor: Colors.green,
-        child: const Icon(Icons.add),
+          if (isLoading)
+            const CircularProgressIndicator()
+          else
+            Expanded(
+              child: ListView(
+                children: [
+                  ...groupedSubjectWidgets(),
+                  ...ungroupedSubjectWidgets(),
+                  ...gradeGroupManagementWidgets(),
+                ],
+              ),
+            ),
+        ],
       ),
     );
+  }
+
+  List<Widget> groupedSubjectWidgets() {
+    final student = selectedStudent;
+    final grades = student?.grades ?? {};
+    final widgets = <Widget>[];
+
+    for (final entry in gradeGroups.entries) {
+      final groupId = entry.key;
+      final groupData = entry.value;
+      final subjectsInGroup = studentSubjects.where((s) => s['gradeGroupId'] == groupId).toList();
+      if (subjectsInGroup.isEmpty) continue;
+
+      final columns = List<String>.from(groupData['columns']);
+      final weights = List<num>.from(groupData['weights']);
+
+      widgets.add(Card(
+        margin: const EdgeInsets.all(12),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(groupData['groupName'], style: const TextStyle(fontWeight: FontWeight.bold)),
+              Table(
+                border: TableBorder.all(),
+                children: [
+                  TableRow(
+                    children: [
+                      const Padding(padding: EdgeInsets.all(6), child: Text('Môn học')),
+                      ...columns.map((c) => Padding(padding: const EdgeInsets.all(6), child: Text(c))),
+                      const Padding(padding: EdgeInsets.all(6), child: Text('Trung bình')),
+                    ],
+                  ),
+                  ...subjectsInGroup.map((subject) {
+                    final subjectName = subject['name'];
+                    final subjectId = subject['id'];
+                    final studentGrades = grades[subjectName] ?? {};
+                    double avg = 0;
+                    for (int i = 0; i < columns.length; i++) {
+                      final score = (studentGrades[columns[i]] ?? 0).toDouble();
+                      avg += score * weights[i];
+                    }
+                    return TableRow(
+                      children: [
+                        Padding(padding: const EdgeInsets.all(6), child: Text(subjectName)),
+                        ...columns.map((col) {
+                          final controller = TextEditingController(text: (studentGrades[col] ?? '').toString());
+                          return Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: TextField(
+                              controller: controller,
+                              keyboardType: TextInputType.number,
+                              onSubmitted: (val) {
+                                final v = double.tryParse(val);
+                                if (v != null) {
+                                  updateGrade(student!.id, subjectName, col, v);
+                                  setState(() => studentGrades[col] = v);
+                                }
+                              },
+                            ),
+                          );
+                        }).toList(),
+                        Padding(padding: const EdgeInsets.all(6), child: Text(avg.toStringAsFixed(1))),
+                      ],
+                    );
+                  }).toList()
+                ],
+              ),
+            ],
+          ),
+        ),
+      ));
+    }
+
+    return widgets;
+  }
+
+  List<Widget> ungroupedSubjectWidgets() {
+    final ungrouped = studentSubjects.where((s) => s['gradeGroupId'] == null).toList();
+    return ungrouped.map((subject) => ListTile(
+      title: Text(subject['name'] ?? ''),
+      subtitle: const Text("(Chưa có nhóm cột)"),
+      trailing: IconButton(
+        icon: const Icon(Icons.add_circle, color: Colors.blue),
+        onPressed: () => showAssignGroupDialog(subject['id']),
+      ),
+    )).toList();
+  }
+
+  List<Widget> gradeGroupManagementWidgets() {
+    return [
+      const Padding(
+        padding: EdgeInsets.only(top: 24, left: 16),
+        child: Text("Tất cả nhóm cột điểm:", style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
+      ...gradeGroups.entries.map((entry) {
+        final groupId = entry.key;
+        final name = entry.value['groupName'] ?? '';
+        final columns = List<String>.from(entry.value['columns']);
+        final weights = List<num>.from(entry.value['weights']);
+        return ListTile(
+          title: Text(name),
+          subtitle: Text("Cột: ${columns.join(', ')}\nTrọng số: ${weights.join(', ')}"),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.orange),
+                onPressed: () => editGradeGroup(groupId, entry.value),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => deleteGradeGroup(groupId),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    ];
   }
 }
 
 class Student {
+  final String id;
   final String name;
-  final List<SubjectGrade> grades;
+  final Map<String, dynamic> grades;
 
-  Student({required this.name, required this.grades});
-}
-
-class SubjectGrade {
-  final String subject;
-  double midterm;
-  double finalExam;
-
-  SubjectGrade({required this.subject, required this.midterm, required this.finalExam});
+  Student({required this.id, required this.name, required this.grades});
 }

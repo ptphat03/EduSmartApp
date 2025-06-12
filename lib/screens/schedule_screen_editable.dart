@@ -80,6 +80,7 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
         initialData: (editIndex != null && student.timetable[dateKey] != null && student.timetable[dateKey]!.length > editIndex)
             ? student.timetable[dateKey]![editIndex]
             : null,
+        studentId: student.id,
       ),
     );
 
@@ -94,12 +95,25 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
       });
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
-        await FirebaseFirestore.instance
+        final studentRef = FirebaseFirestore.instance
             .collection('users')
             .doc(uid)
             .collection('students')
-            .doc(student.id)
-            .set({'timetable': student.timetable}, SetOptions(merge: true));
+            .doc(student.id);
+
+        // Lưu thời khóa biểu
+        await studentRef.set({'timetable': student.timetable}, SetOptions(merge: true));
+
+        // Lưu môn học nếu chưa tồn tại
+        final subjectName = lesson['subject'];
+        if (subjectName != null && subjectName is String && subjectName.isNotEmpty) {
+          final subjectRef = studentRef.collection('subjects');
+          final existing = await subjectRef.where('name', isEqualTo: subjectName).limit(1).get();
+
+          if (existing.docs.isEmpty) {
+            await subjectRef.add({'name': subjectName});
+          }
+        }
       }
     }
   }
@@ -311,6 +325,49 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.note_alt_outlined, size: 20, color: Colors.grey),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        'Ghi chú: ${lesson['notes'] ?? ''}',
+                                        style: const TextStyle(fontSize: 15),
+                                      ),
+                                    ),
+                                    if (isEditMode)
+                                      IconButton(
+                                        icon: const Icon(Icons.delete, color: Colors.red),
+                                        tooltip: 'Xoá',
+                                        onPressed: () async {
+                                          final confirmed = await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              title: const Text('Xác nhận xoá'),
+                                              content: const Text('Bạn có chắc muốn xoá buổi học này?'),
+                                              actions: [
+                                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Huỷ')),
+                                                ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Xoá')),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirmed == true) {
+                                            setState(() => student.timetable[dateKey]!.removeAt(i));
+                                            final uid = FirebaseAuth.instance.currentUser?.uid;
+                                            if (uid != null) {
+                                              final studentRef = FirebaseFirestore.instance
+                                                  .collection('users')
+                                                  .doc(uid)
+                                                  .collection('students')
+                                                  .doc(student.id);
+                                              await studentRef.set({'timetable': student.timetable}, SetOptions(merge: true));
+                                            }
+                                          }
+                                        },
+                                      ),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
@@ -340,9 +397,23 @@ class Student {
   });
 }
 
+Future<List<String>> loadSubjectsFromStudent(String studentId) async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return [];
+  final snapshot = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .collection('students')
+      .doc(studentId)
+      .collection('subjects')
+      .get();
+  return snapshot.docs.map((doc) => doc['name'] as String).toList();
+}
+
 class AddLessonDialog extends StatefulWidget {
   final Map<String, dynamic>? initialData;
-  const AddLessonDialog({super.key, this.initialData});
+  final String studentId;
+  const AddLessonDialog({super.key, this.initialData, required this.studentId});
 
   @override
   State<AddLessonDialog> createState() => _AddLessonDialogState();
@@ -351,6 +422,8 @@ class AddLessonDialog extends StatefulWidget {
 class _AddLessonDialogState extends State<AddLessonDialog> {
   final _formKey = GlobalKey<FormState>();
   late final Map<String, TextEditingController> controllers;
+  List<String> subjectList = [];
+  String? selectedSubject;
 
   @override
   void initState() {
@@ -359,16 +432,22 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       'start': TextEditingController(text: widget.initialData?['start'] ?? ''),
       'end': TextEditingController(text: widget.initialData?['end'] ?? ''),
       'room': TextEditingController(text: widget.initialData?['room'] ?? ''),
-      'subject': TextEditingController(text: widget.initialData?['subject'] ?? ''),
       'lecturer': TextEditingController(text: widget.initialData?['lecturer'] ?? ''),
+      'notes': TextEditingController(text: widget.initialData?['notes'] ?? ''),
     };
+    selectedSubject = widget.initialData?['subject'];
+    loadSubjects();
+  }
+
+  Future<void> loadSubjects() async {
+    subjectList = await loadSubjectsFromStudent(widget.studentId);
+    setState(() {});
   }
 
   Future<void> _pickTime(String key) async {
     final now = TimeOfDay.now();
     final text = controllers[key]?.text ?? '';
     TimeOfDay initial;
-
     try {
       final parts = text.split(':');
       final hour = int.parse(parts[0]);
@@ -377,26 +456,18 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
     } catch (_) {
       initial = now;
     }
-
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial,
-    );
-
+    final picked = await showTimePicker(context: context, initialTime: initial);
     if (picked != null) {
-      setState(() {
-        controllers[key]?.text = picked.format(context);
-      });
+      setState(() => controllers[key]?.text = picked.format(context));
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
       insetPadding: const EdgeInsets.all(32),
       child: FractionallySizedBox(
-        widthFactor: 0.7,
+        widthFactor: 0.8,
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Form(
@@ -417,9 +488,94 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                         labelText: _getLabel(entry.key),
                         border: const OutlineInputBorder(),
                       ),
-                      validator: (value) => value == null || value.isEmpty ? 'Không được để trống' : null,
+                      validator: (value) =>
+                      (entry.key == 'room' || entry.key == 'lecturer')
+                          ? null
+                          : (value == null || value.isEmpty ? 'Không được để trống' : null),
                     ),
                   ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: subjectList.contains(selectedSubject) ? selectedSubject : null,
+                  items: [
+                    ...subjectList.map((s) => DropdownMenuItem(value: s, child: Text(s))),
+                    const DropdownMenuItem(value: '__add_new__', child: Text('➕ Thêm môn học mới')),
+                  ],
+                  onChanged: (value) async {
+                    if (value == '__add_new__') {
+                      final newSubject = await showDialog<String>(
+                        context: context,
+                        builder: (context) {
+                          final controller = TextEditingController();
+                          return AlertDialog(
+                            title: const Text('Thêm môn học mới'),
+                            content: TextField(
+                              controller: controller,
+                              decoration: const InputDecoration(hintText: 'Nhập tên môn học'),
+                            ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(context, controller.text.trim()),
+                                child: const Text('Lưu'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+
+                      if (newSubject != null && newSubject.isNotEmpty) {
+                        final uid = FirebaseAuth.instance.currentUser?.uid;
+                        if (uid != null) {
+                          final docRef = FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(uid)
+                              .collection('students')
+                              .doc(widget.studentId)
+                              .collection('subjects');
+
+                          final exists = await docRef.where('name', isEqualTo: newSubject).limit(1).get();
+                          if (exists.docs.isEmpty) {
+                            await docRef.add({'name': newSubject});
+                          }
+                        }
+                        subjectList.add(newSubject);
+                        setState(() => selectedSubject = newSubject);
+                      }
+                    } else {
+                      setState(() => selectedSubject = value);
+                    }
+                  },
+                  decoration: const InputDecoration(labelText: 'Môn học', border: OutlineInputBorder()),
+                  validator: (value) => value == null || value.isEmpty ? 'Chọn môn học' : null,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Ghi chú', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 8,
+                        children: ['Kiểm tra', 'Thuyết trình', 'Thi'].map((note) => ActionChip(
+                          label: Text(note),
+                          onPressed: () => setState(() => controllers['notes']!.text = note),
+                        )).toList(),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: controllers['notes'],
+                        decoration: const InputDecoration(
+                          labelText: 'Nhập ghi chú',
+                          border: OutlineInputBorder(),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+
+
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -430,7 +586,12 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                       onPressed: () {
                         if (_formKey.currentState!.validate()) {
                           Navigator.pop(context, {
-                            for (var entry in controllers.entries) entry.key: entry.value.text,
+                            'start': controllers['start']!.text,
+                            'end': controllers['end']!.text,
+                            'room': controllers['room']!.text,
+                            'lecturer': controllers['lecturer']!.text,
+                            'subject': selectedSubject,
+                            'notes': controllers['notes']!.text,
                           });
                         }
                       },
@@ -448,18 +609,12 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
 
   String _getLabel(String key) {
     switch (key) {
-      case 'start':
-        return 'Giờ bắt đầu';
-      case 'end':
-        return 'Giờ kết thúc';
-      case 'room':
-        return 'Phòng';
-      case 'subject':
-        return 'Môn học';
-      case 'lecturer':
-        return 'Giảng viên';
-      default:
-        return key;
+      case 'start': return 'Giờ bắt đầu';
+      case 'end': return 'Giờ kết thúc';
+      case 'room': return 'Phòng';
+      case 'lecturer': return 'Giảng viên';
+      default: return key;
     }
   }
 }
+

@@ -21,7 +21,7 @@ class TrackingBoardScreen extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.greenAccent, Colors.white],
+            colors: [Colors.blueAccent, Colors.white],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -105,7 +105,7 @@ class StudentCard extends StatelessWidget {
       child: ListTile(
         leading: const CircleAvatar(
           radius: 20,
-          backgroundImage: AssetImage('assets/avatar.png'),
+          // backgroundImage: AssetImage('assets/avatar.png'),
         ),
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text("⏰ Thời gian: $time"),

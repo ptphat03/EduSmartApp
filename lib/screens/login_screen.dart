@@ -30,25 +30,16 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       final user = FirebaseAuth.instance.currentUser;
+
       if (user != null && user.emailVerified) {
         final uid = user.uid;
-        final prefs = await SharedPreferences.getInstance();
 
-        final isFirstLogin =
-            user.metadata.creationTime == user.metadata.lastSignInTime;
-        final hasShownWelcome = prefs.getBool('welcome_shown_$uid') ?? false;
-
-        // Kiểm tra xem document "students/{uid}" đã tồn tại chưa
         final studentDoc = await FirebaseFirestore.instance
-            .collection('students')
+            .collection('users')
             .doc(uid)
             .get();
 
-        final shouldShowWelcome =
-            isFirstLogin || !studentDoc.exists || !hasShownWelcome;
-
-        if (shouldShowWelcome) {
-          await prefs.setBool('welcome_shown_$uid', true);
+        if (!studentDoc.exists) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const WelcomeScreen()),
@@ -83,6 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => isLoading = false);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
