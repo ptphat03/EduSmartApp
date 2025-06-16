@@ -114,7 +114,14 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
       appBar: AppBar(
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
-        title: const Text("Thông tin người dùng"),
+        title: const Text(
+        "Thông tin người dùng",
+        style: TextStyle(
+        color: Colors.white,
+        fontSize: 24, // 👈 chỉnh cỡ chữ
+        fontWeight: FontWeight.bold, // 👈 tô đậm
+          ),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
             onPressed: () {
@@ -198,17 +205,23 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
                     child: isLoading
                         ? const Center(child: CircularProgressIndicator())
                         : ElevatedButton.icon(
-                      icon: const Icon(Icons.save),
-                      label: const Text("Lưu & Tiếp tục"),
+                      icon: const Icon(Icons.save, color: Colors.white),
+                      label: const Text(
+                        "Lưu & Tiếp tục",
+                        style: TextStyle(color: Colors.white,
+                          fontSize: 18,),
+                      ),
                       onPressed: saveUserInfo,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white, // Cách viết chuẩn
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                     ),
                   ),
+
                 ],
               ),
             ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'student_info_screen.dart';
 import 'user_info_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
@@ -7,8 +6,10 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Colors.blue.shade700;
+
     return Scaffold(
-      backgroundColor: Colors.blue[50],
+      backgroundColor: Colors.blue.shade50,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -20,20 +21,20 @@ class WelcomeScreen extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.emoji_people, size: 80, color: Colors.black),
+                  const Icon(Icons.school_rounded, size: 80, color: Colors.blue),
                   const SizedBox(height: 20),
                   Text(
-                    '🎉 Xin chào!',
+                    '🎓 Chào mừng bạn!',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.blue[800],
+                      color: primaryColor,
                     ),
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Cảm ơn bạn đã đăng ký.\nChúng tôi sẽ giúp bạn bắt đầu một hành trình an toàn & tiện lợi.',
+                    'Ứng dụng giúp bạn theo dõi lịch học, điểm số\nvà đảm bảo an toàn cho học sinh mọi lúc mọi nơi.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16),
+                    style: TextStyle(fontSize: 16, height: 1.5),
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
@@ -42,11 +43,12 @@ class WelcomeScreen extends StatelessWidget {
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.arrow_forward),
                       label: const Text(
-                        'Bắt đầu nhập thông tin',
+                        'Bắt đầu thiết lập thông tin',
                         style: TextStyle(fontSize: 16),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),

@@ -118,7 +118,13 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
     return Scaffold(
       backgroundColor: Colors.blue[50],
       appBar: AppBar(
-        title: const Text("Thông tin học sinh"),
+        title: const Text(
+          "Thông tin học sinh",
+          style: TextStyle(
+            fontSize: 24, // bạn có thể chỉnh to hơn nếu cần, ví dụ 22
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         leading: IconButton(
@@ -131,6 +137,7 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
           },
         ),
       ),
+
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -215,17 +222,23 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
                     child: isLoading
                         ? const Center(child: CircularProgressIndicator())
                         : ElevatedButton.icon(
-                      icon: const Icon(Icons.save),
-                      label: const Text("Lưu & Tiếp tục"),
+                      icon: const Icon(Icons.save, color: Colors.white),
+                      label: const Text(
+                        "Lưu & Tiếp tục",
+                        style: TextStyle(color: Colors.white, fontSize: 17),
+                      ),
                       onPressed: saveStudentInfo,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        foregroundColor: Colors.white, // giúp icon và ripple effect cũng màu trắng
+                        textStyle: const TextStyle(fontSize: 18),
                       ),
                     ),
-                  ),
+                  )
+
                 ],
               ),
             ),

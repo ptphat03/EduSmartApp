@@ -13,10 +13,10 @@ class ReportCardScreen extends StatefulWidget {
 class _ReportCardScreenState extends State<ReportCardScreen> {
   bool isLoading = true;
   List<Student> students = [];
-  List<Map<String, dynamic>> allSubjects = [];
+  List<Map<String, dynamic>> studentSubjects = [];
   Map<String, Map<String, dynamic>> gradeGroups = {};
   String? selectedStudentId;
-  List<Map<String, dynamic>> studentSubjects = [];
+  bool isEditingGrades = false;
 
   @override
   void initState() {
@@ -33,8 +33,11 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    final studentsSnap = await FirebaseFirestore.instance.collection('users').doc(uid).collection('students').get();
-    final gradeGroupSnap = await FirebaseFirestore.instance.collection('gradeGroups').get();
+    final studentsSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('students')
+        .get();
 
     students = studentsSnap.docs.map((doc) {
       final data = doc.data();
@@ -45,16 +48,31 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
       );
     }).toList();
 
-    for (var doc in gradeGroupSnap.docs) {
-      gradeGroups[doc.id] = doc.data();
-    }
-
     if (students.isNotEmpty) {
       selectedStudentId = students.first.id;
+      await loadGradeGroups();
       await loadStudentSubjects();
     }
 
     setState(() => isLoading = false);
+  }
+
+  Future<void> loadGradeGroups() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || selectedStudentId == null) return;
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('students')
+        .doc(selectedStudentId)
+        .collection('gradeGroups')
+        .get();
+
+    gradeGroups.clear();
+    for (var doc in snapshot.docs) {
+      gradeGroups[doc.id] = doc.data();
+    }
   }
 
   Future<void> loadStudentSubjects() async {
@@ -67,15 +85,240 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
         .doc(selectedStudentId)
         .collection('subjects')
         .get();
-    studentSubjects = snapshot.docs.map((doc) => {"id": doc.id, ...doc.data()}).toList();
+    studentSubjects =
+        snapshot.docs.map((doc) => {"id": doc.id, ...doc.data()}).toList();
   }
 
   void updateGrade(String studentId, String subject, String col, double value) async {
-    await FirebaseFirestore.instance.collection('users')
+    await FirebaseFirestore.instance
+        .collection('users')
         .doc(FirebaseAuth.instance.currentUser!.uid)
-        .collection('students').doc(studentId)
-        .set({"grades": {subject: {col: value}}}, SetOptions(merge: true));
+        .collection('students')
+        .doc(studentId)
+        .set({
+      "grades": {subject: {col: value}}
+    }, SetOptions(merge: true));
   }
+  void showGradeGroupManagerDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Quản lý nhóm cột điểm'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              ...gradeGroups.entries.map((entry) {
+                final groupId = entry.key;
+                final name = entry.value['groupName'] ?? '';
+                final columns = List<String>.from(entry.value['columns']);
+                final weights = List<num>.from(entry.value['weights']);
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  child: ListTile(
+                    title: Text(name),
+                    subtitle: Text("Cột: ${columns.join(', ')}\nTrọng số: ${weights.join(', ')}"),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.orange),
+                          onPressed: () async {
+                            Navigator.pop(context); // đóng dialog trước
+                            await editGradeGroup(groupId, entry.value);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () async {
+                            await deleteGradeGroup(groupId);
+                            setState(() {}); // cập nhật lại UI trong dialog
+                            Navigator.pop(context);
+                            showGradeGroupManagerDialog(); // mở lại dialog
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+              const Divider(),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text("Thêm nhóm cột mới"),
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await showAddGradeGroupDialog();
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Đóng'),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+  void showSubjectManagerDialog() {
+    final nameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Quản lý môn học"),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              ...studentSubjects.map((subject) {
+                final subjectId = subject['id'];
+                final name = subject['name'] ?? '';
+                return Card(
+                  child: ListTile(
+                    title: Text(name),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.orange),
+                          onPressed: () {
+                            nameController.text = name;
+                            String? selectedGroupId = subject['gradeGroupId'];
+
+                            showDialog(
+                              context: context,
+                              builder: (_) => StatefulBuilder(
+                                builder: (context, setState) => AlertDialog(
+                                  title: const Text("Chỉnh sửa môn học"),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      TextField(
+                                        controller: nameController,
+                                        decoration: const InputDecoration(labelText: "Tên môn học"),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      DropdownButtonFormField<String>(
+                                        value: selectedGroupId,
+                                        decoration: const InputDecoration(labelText: "Nhóm cột điểm"),
+                                        items: gradeGroups.entries.map((e) => DropdownMenuItem(
+                                          value: e.key,
+                                          child: Text(e.value['groupName']),
+                                        )).toList(),
+                                        onChanged: (value) => setState(() => selectedGroupId = value),
+                                      ),
+                                    ],
+                                  ),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(context), child: const Text("Huỷ")),
+                                    ElevatedButton(
+                                      onPressed: () async {
+                                        final uid = FirebaseAuth.instance.currentUser!.uid;
+                                        await FirebaseFirestore.instance
+                                            .collection('users')
+                                            .doc(uid)
+                                            .collection('students')
+                                            .doc(selectedStudentId)
+                                            .collection('subjects')
+                                            .doc(subjectId)
+                                            .update({
+                                          'name': nameController.text.trim(),
+                                          'gradeGroupId': selectedGroupId,
+                                        });
+                                        Navigator.pop(context); // đóng dialog sửa
+                                        Navigator.pop(context); // đóng dialog quản lý
+                                        await loadStudentSubjects();
+                                        setState(() {});
+                                        showSubjectManagerDialog(); // mở lại
+                                      },
+                                      child: const Text("Lưu"),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () async {
+                            final uid = FirebaseAuth.instance.currentUser!.uid;
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(uid)
+                                .collection('students')
+                                .doc(selectedStudentId)
+                                .collection('subjects')
+                                .doc(subjectId)
+                                .delete();
+                            await loadStudentSubjects();
+                            setState(() {});
+                            Navigator.pop(context);
+                            showSubjectManagerDialog(); // reload UI
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              const Divider(),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text("Thêm môn học mới"),
+                onPressed: () {
+                  nameController.clear();
+                  showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text("Thêm môn học"),
+                      content: TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: "Tên môn học"),
+                      ),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Huỷ")),
+                        ElevatedButton(
+                          onPressed: () async {
+                            final uid = FirebaseAuth.instance.currentUser!.uid;
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(uid)
+                                .collection('students')
+                                .doc(selectedStudentId)
+                                .collection('subjects')
+                                .add({'name': nameController.text.trim()});
+                            Navigator.pop(context); // đóng form thêm
+                            Navigator.pop(context); // đóng dialog quản lý
+                            await loadStudentSubjects();
+                            setState(() {});
+                            showSubjectManagerDialog(); // mở lại
+                          },
+                          child: const Text("Lưu"),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Đóng")),
+        ],
+      ),
+    );
+  }
+
+
 
   Future<void> assignGradeGroup(String subjectId, String groupId) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -94,72 +337,18 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
     setState(() {});
   }
 
-  Future<void> editGradeGroup(String groupId, Map<String, dynamic> currentData) async {
-    final nameController = TextEditingController(text: currentData['groupName']);
-    final columnsController = TextEditingController(text: (currentData['columns'] as List).join(', '));
-    final weightsController = TextEditingController(text: (currentData['weights'] as List).join(', '));
-
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Chỉnh sửa nhóm cột điểm'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Tên nhóm'),
-            ),
-            TextField(
-              controller: columnsController,
-              decoration: const InputDecoration(labelText: 'Tên các cột (phân cách bằng dấu phẩy)'),
-            ),
-            TextField(
-              controller: weightsController,
-              decoration: const InputDecoration(labelText: 'Trọng số tương ứng (phân cách bằng dấu phẩy)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Huỷ')),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              final columns = columnsController.text.split(',').map((e) => e.trim()).toList();
-              final weights = weightsController.text.split(',').map((e) => num.tryParse(e.trim()) ?? 0).toList();
-
-              if (name.isNotEmpty && columns.isNotEmpty && columns.length == weights.length) {
-                await FirebaseFirestore.instance.collection('gradeGroups').doc(groupId).update({
-                  'groupName': name,
-                  'columns': columns,
-                  'weights': weights,
-                });
-                Navigator.pop(context);
-                await loadAllData();
-              }
-            },
-            child: const Text('Lưu'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> deleteGradeGroup(String groupId) async {
-    await FirebaseFirestore.instance.collection('gradeGroups').doc(groupId).delete();
-    await loadAllData();
-  }
-
   Future<void> showAssignGroupDialog(String subjectId) async {
     await showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Chọn nhóm cột điểm'),
         content: DropdownButtonFormField<String>(
-          items: gradeGroups.entries.map((e) => DropdownMenuItem(
+          items: gradeGroups.entries
+              .map((e) => DropdownMenuItem(
             value: e.key,
             child: Text(e.value['groupName']),
-          )).toList(),
+          ))
+              .toList(),
           onChanged: (groupId) {
             if (groupId != null) {
               assignGradeGroup(subjectId, groupId);
@@ -173,85 +362,322 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
 
   Future<void> showAddGradeGroupDialog() async {
     final nameController = TextEditingController();
-    final columnsController = TextEditingController();
-    final weightsController = TextEditingController();
+    final List<TextEditingController> columnControllers = [];
+    final List<TextEditingController> weightControllers = [];
+
+    void addColumnField() {
+      columnControllers.add(TextEditingController());
+      weightControllers.add(TextEditingController());
+    }
+
+    addColumnField(); // Khởi tạo 1 dòng mặc định
 
     await showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Tạo nhóm cột điểm mới'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Tên nhóm'),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Tạo nhóm cột điểm mới'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Tên nhóm'),
+                ),
+                const SizedBox(height: 12),
+                const Text("Danh sách cột và trọng số:", style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                ...List.generate(columnControllers.length, (index) {
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: columnControllers[index],
+                          decoration: const InputDecoration(labelText: 'Tên cột'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: weightControllers[index],
+                          decoration: const InputDecoration(labelText: 'Trọng số'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: const Icon(Icons.add_circle, color: Colors.green),
+                    tooltip: 'Thêm cột',
+                    onPressed: () => setState(addColumnField),
+                  ),
+                ),
+              ],
             ),
-            TextField(
-              controller: columnsController,
-              decoration: const InputDecoration(labelText: 'Tên các cột (phân cách bằng dấu phẩy)'),
-            ),
-            TextField(
-              controller: weightsController,
-              decoration: const InputDecoration(labelText: 'Trọng số tương ứng (phân cách bằng dấu phẩy)'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Huỷ')),
+            ElevatedButton(
+              onPressed: () async {
+                final name = nameController.text.trim();
+                final columns = columnControllers.map((c) => c.text.trim()).toList();
+                final weights = weightControllers.map((w) => num.tryParse(w.text.trim()) ?? 0).toList();
+
+                if (name.isNotEmpty &&
+                    columns.isNotEmpty &&
+                    !columns.any((c) => c.isEmpty) &&
+                    columns.length == weights.length) {
+                  final uid = FirebaseAuth.instance.currentUser!.uid;
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(uid)
+                      .collection('students')
+                      .doc(selectedStudentId)
+                      .collection('gradeGroups')
+                      .add({
+                    'groupName': name,
+                    'columns': columns,
+                    'weights': weights,
+                  });
+                  Navigator.pop(context);
+                  await loadGradeGroups();
+                  setState(() {});
+                }
+              },
+              child: const Text('Lưu'),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Huỷ')),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              final columns = columnsController.text.split(',').map((e) => e.trim()).toList();
-              final weights = weightsController.text.split(',').map((e) => num.tryParse(e.trim()) ?? 0).toList();
-
-              if (name.isNotEmpty && columns.isNotEmpty && columns.length == weights.length) {
-                await FirebaseFirestore.instance.collection('gradeGroups').add({
-                  'groupName': name,
-                  'columns': columns,
-                  'weights': weights,
-                });
-                Navigator.pop(context);
-                await loadAllData();
-              }
-            },
-            child: const Text('Lưu'),
-          ),
-        ],
       ),
     );
   }
 
+
+  Future<void> editGradeGroup(String groupId, Map<String, dynamic> data) async {
+    final nameController = TextEditingController(text: data['groupName']);
+    final columns = List<String>.from(data['columns']);
+    final weights = List<num>.from(data['weights']);
+
+    final List<TextEditingController> columnControllers =
+    columns.map((c) => TextEditingController(text: c)).toList();
+    final List<TextEditingController> weightControllers =
+    weights.map((w) => TextEditingController(text: w.toString())).toList();
+
+    void addColumnField() {
+      columnControllers.add(TextEditingController());
+      weightControllers.add(TextEditingController());
+    }
+
+    await showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Chỉnh sửa nhóm cột điểm'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Tên nhóm'),
+                ),
+                const SizedBox(height: 12),
+                const Text("Danh sách cột và trọng số:", style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                ...List.generate(columnControllers.length, (index) {
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: columnControllers[index],
+                          decoration: const InputDecoration(labelText: 'Tên cột'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: weightControllers[index],
+                          decoration: const InputDecoration(labelText: 'Trọng số'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: const Icon(Icons.add_circle, color: Colors.green),
+                    tooltip: 'Thêm cột',
+                    onPressed: () => setState(addColumnField),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Huỷ')),
+            ElevatedButton(
+              onPressed: () async {
+                final name = nameController.text.trim();
+                final cols = columnControllers.map((c) => c.text.trim()).toList();
+                final ws = weightControllers.map((w) => num.tryParse(w.text.trim()) ?? 0).toList();
+
+                if (name.isNotEmpty &&
+                    cols.isNotEmpty &&
+                    !cols.any((c) => c.isEmpty) &&
+                    cols.length == ws.length) {
+                  final uid = FirebaseAuth.instance.currentUser!.uid;
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(uid)
+                      .collection('students')
+                      .doc(selectedStudentId)
+                      .collection('gradeGroups')
+                      .doc(groupId)
+                      .update({
+                    'groupName': name,
+                    'columns': cols,
+                    'weights': ws,
+                  });
+                  Navigator.pop(context);
+                  await loadGradeGroups();
+                  setState(() {});
+                }
+              },
+              child: const Text('Lưu'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  Future<void> deleteGradeGroup(String groupId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || selectedStudentId == null) return;
+
+    final studentRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('students')
+        .doc(selectedStudentId!);
+
+    final batch = FirebaseFirestore.instance.batch();
+
+    // Xóa group
+    final groupDocRef = studentRef.collection('gradeGroups').doc(groupId);
+    batch.delete(groupDocRef);
+
+    // Lấy tất cả subject có gradeGroupId == groupId
+    final subjectSnap = await studentRef.collection('subjects').get();
+    for (final doc in subjectSnap.docs) {
+      final data = doc.data();
+      if (data['gradeGroupId'] == groupId) {
+        // Gỡ liên kết
+        batch.update(doc.reference, {'gradeGroupId': FieldValue.delete()});
+      }
+    }
+
+    await batch.commit();
+    await loadGradeGroups();
+    await loadStudentSubjects();
+    setState(() {});
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Bảng điểm"),
-        backgroundColor: Colors.blue.shade600,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_box_outlined),
-            tooltip: 'Tạo nhóm cột',
-            onPressed: showAddGradeGroupDialog,
-          ),
-        ],
-      ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: DropdownButtonFormField<String>(
-              value: selectedStudentId,
-              items: students.map((student) => DropdownMenuItem(
-                value: student.id,
-                child: Text(student.name),
-              )).toList(),
-              onChanged: (value) async {
-                selectedStudentId = value;
-                await loadStudentSubjects();
-                setState(() {});
-              },
-              decoration: const InputDecoration(labelText: 'Chọn học sinh'),
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: selectedStudentId,
+                    decoration: InputDecoration(
+                      labelText: 'Chọn học sinh',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    items: students.map((student) => DropdownMenuItem(
+                      value: student.id,
+                      child: Text(student.name),
+                    )).toList(),
+                    onChanged: (value) async {
+                      selectedStudentId = value;
+                      await loadGradeGroups();
+                      await loadStudentSubjects();
+                      setState(() {});
+                    },
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(isEditingGrades ? Icons.check : Icons.edit),
+                  tooltip: isEditingGrades ? 'Tắt chỉnh sửa điểm' : 'Bật chỉnh sửa điểm',
+                  onPressed: () {
+                    setState(() => isEditingGrades = !isEditingGrades);
+                  },
+                ),
+                const SizedBox(width: 4),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  tooltip: 'Tùy chọn',
+                  onSelected: (value) async {
+                    if (value == 'edit') {
+                      if (gradeGroups.isNotEmpty) {
+                        final firstEntry = gradeGroups.entries.first;
+                        await editGradeGroup(firstEntry.key, firstEntry.value);
+                      }
+                    } else if (value == 'manage') {
+                      showGradeGroupManagerDialog();
+                    } else if (value == 'subjects') {
+                      showSubjectManagerDialog();
+                    } else if (value == 'refresh') {
+                      setState(() => isLoading = true);
+                      await loadGradeGroups();
+                      await loadStudentSubjects();
+                      setState(() => isLoading = false);
+                    }
+                  },
+
+                  itemBuilder: (context) => [
+                    const PopupMenuItem<String>(
+                      value: 'subjects',
+                      child: ListTile(
+                        leading: Icon(Icons.book),
+                        title: Text("Quản lý môn học"),
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'manage',
+                      child: ListTile(
+                        leading: Icon(Icons.list),
+                        title: Text("Quản lý nhóm cột điểm"),
+                      ),
+                    ),
+
+                    const PopupMenuItem<String>(
+                      value: 'refresh',
+                      child: ListTile(
+                        leading: Icon(Icons.refresh),
+                        title: Text("Tải lại"),
+                      ),
+                    ),
+                  ],
+                ),
+
+
+              ],
             ),
           ),
           if (isLoading)
@@ -262,7 +688,6 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                 children: [
                   ...groupedSubjectWidgets(),
                   ...ungroupedSubjectWidgets(),
-                  ...gradeGroupManagementWidgets(),
                 ],
               ),
             ),
@@ -279,7 +704,8 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
     for (final entry in gradeGroups.entries) {
       final groupId = entry.key;
       final groupData = entry.value;
-      final subjectsInGroup = studentSubjects.where((s) => s['gradeGroupId'] == groupId).toList();
+      final subjectsInGroup =
+      studentSubjects.where((s) => s['gradeGroupId'] == groupId).toList();
       if (subjectsInGroup.isEmpty) continue;
 
       final columns = List<String>.from(groupData['columns']);
@@ -316,12 +742,14 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                       children: [
                         Padding(padding: const EdgeInsets.all(6), child: Text(subjectName)),
                         ...columns.map((col) {
-                          final controller = TextEditingController(text: (studentGrades[col] ?? '').toString());
+                          final controller =
+                          TextEditingController(text: (studentGrades[col] ?? '').toString());
                           return Padding(
                             padding: const EdgeInsets.all(6),
                             child: TextField(
                               controller: controller,
                               keyboardType: TextInputType.number,
+                              enabled: isEditingGrades,
                               onSubmitted: (val) {
                                 final v = double.tryParse(val);
                                 if (v != null) {
@@ -332,7 +760,10 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                             ),
                           );
                         }).toList(),
-                        Padding(padding: const EdgeInsets.all(6), child: Text(avg.toStringAsFixed(1))),
+                        Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Text(avg.toStringAsFixed(1)),
+                        ),
                       ],
                     );
                   }).toList()
@@ -349,46 +780,16 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
 
   List<Widget> ungroupedSubjectWidgets() {
     final ungrouped = studentSubjects.where((s) => s['gradeGroupId'] == null).toList();
-    return ungrouped.map((subject) => ListTile(
+    return ungrouped
+        .map((subject) => ListTile(
       title: Text(subject['name'] ?? ''),
       subtitle: const Text("(Chưa có nhóm cột)"),
       trailing: IconButton(
         icon: const Icon(Icons.add_circle, color: Colors.blue),
         onPressed: () => showAssignGroupDialog(subject['id']),
       ),
-    )).toList();
-  }
-
-  List<Widget> gradeGroupManagementWidgets() {
-    return [
-      const Padding(
-        padding: EdgeInsets.only(top: 24, left: 16),
-        child: Text("Tất cả nhóm cột điểm:", style: TextStyle(fontWeight: FontWeight.bold)),
-      ),
-      ...gradeGroups.entries.map((entry) {
-        final groupId = entry.key;
-        final name = entry.value['groupName'] ?? '';
-        final columns = List<String>.from(entry.value['columns']);
-        final weights = List<num>.from(entry.value['weights']);
-        return ListTile(
-          title: Text(name),
-          subtitle: Text("Cột: ${columns.join(', ')}\nTrọng số: ${weights.join(', ')}"),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit, color: Colors.orange),
-                onPressed: () => editGradeGroup(groupId, entry.value),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
-                onPressed: () => deleteGradeGroup(groupId),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    ];
+    ))
+        .toList();
   }
 }
 
