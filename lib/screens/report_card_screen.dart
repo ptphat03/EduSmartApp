@@ -439,15 +439,12 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
 
   Future<void> showAddGradeGroupDialog() async {
     final nameController = TextEditingController();
-    final List<TextEditingController> columnControllers = [];
-    final List<TextEditingController> weightControllers = [];
-
-    void addColumnField() {
-      columnControllers.add(TextEditingController());
-      weightControllers.add(TextEditingController());
-    }
-
-    addColumnField(); // Khởi tạo 1 dòng mặc định
+    List<Map<String, TextEditingController>> fields = [
+      {
+        'col': TextEditingController(),
+        'weight': TextEditingController(),
+      }
+    ];
 
     await showDialog(
       context: context,
@@ -456,7 +453,6 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
           title: const Text('Tạo nhóm cột điểm mới'),
           content: SingleChildScrollView(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: nameController,
@@ -464,33 +460,91 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                 ),
                 const SizedBox(height: 12),
                 const Text("Danh sách cột và trọng số:", style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                ...List.generate(columnControllers.length, (index) {
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: columnControllers[index],
-                          decoration: const InputDecoration(labelText: 'Tên cột'),
+                ...List.generate(fields.length, (index) {
+                  final field = fields[index];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: field['col'],
+                            decoration: const InputDecoration(labelText: 'Tên cột'),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: weightControllers[index],
-                          decoration: const InputDecoration(labelText: 'Trọng số'),
-                          keyboardType: TextInputType.number,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: field['weight'],
+                            decoration: const InputDecoration(labelText: 'Trọng số'),
+                            keyboardType: TextInputType.number,
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        // Mũi tên lên/xuống sát nhau
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.arrow_upward),
+                              onPressed: index > 0
+                                  ? () {
+                                setState(() {
+                                  final temp = fields[index - 1];
+                                  fields[index - 1] = fields[index];
+                                  fields[index] = temp;
+                                });
+                              }
+                                  : null,
+                            ),
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.arrow_downward),
+                              onPressed: index < fields.length - 1
+                                  ? () {
+                                setState(() {
+                                  final temp = fields[index + 1];
+                                  fields[index + 1] = fields[index];
+                                  fields[index] = temp;
+                                });
+                              }
+                                  : null,
+                            ),
+                          ],
+                        ),
+                        // Nút xoá
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: fields.length > 1
+                              ? () => setState(() => fields.removeAt(index))
+                              : null,
+                          tooltip: "Xoá",
+                        ),
+                      ],
+                    ),
                   );
+
+
                 }),
                 Align(
                   alignment: Alignment.centerRight,
                   child: IconButton(
                     icon: const Icon(Icons.add_circle, color: Colors.green),
                     tooltip: 'Thêm cột',
-                    onPressed: () => setState(addColumnField),
+                    onPressed: () {
+                      setState(() {
+                        fields.add({
+                          'col': TextEditingController(),
+                          'weight': TextEditingController(),
+                        });
+                      });
+                    },
                   ),
                 ),
               ],
@@ -501,13 +555,10 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
             ElevatedButton(
               onPressed: () async {
                 final name = nameController.text.trim();
-                final columns = columnControllers.map((c) => c.text.trim()).toList();
-                final weights = weightControllers.map((w) => num.tryParse(w.text.trim()) ?? 0).toList();
+                final columns = fields.map((f) => f['col']!.text.trim()).toList();
+                final weights = fields.map((f) => num.tryParse(f['weight']!.text.trim()) ?? 0).toList();
 
-                if (name.isNotEmpty &&
-                    columns.isNotEmpty &&
-                    !columns.any((c) => c.isEmpty) &&
-                    columns.length == weights.length) {
+                if (name.isNotEmpty && columns.isNotEmpty && !columns.any((c) => c.isEmpty)) {
                   final uid = FirebaseAuth.instance.currentUser!.uid;
                   await FirebaseFirestore.instance
                       .collection('users')
@@ -534,19 +585,19 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
   }
 
 
+
+
   Future<void> editGradeGroup(String groupId, Map<String, dynamic> data) async {
     final nameController = TextEditingController(text: data['groupName']);
+    List<Map<String, TextEditingController>> fields = [];
+
     final columns = List<String>.from(data['columns']);
     final weights = List<num>.from(data['weights']);
-
-    final List<TextEditingController> columnControllers =
-    columns.map((c) => TextEditingController(text: c)).toList();
-    final List<TextEditingController> weightControllers =
-    weights.map((w) => TextEditingController(text: w.toString())).toList();
-
-    void addColumnField() {
-      columnControllers.add(TextEditingController());
-      weightControllers.add(TextEditingController());
+    for (int i = 0; i < columns.length; i++) {
+      fields.add({
+        'col': TextEditingController(text: columns[i]),
+        'weight': TextEditingController(text: weights[i].toString()),
+      });
     }
 
     await showDialog(
@@ -556,7 +607,6 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
           title: const Text('Chỉnh sửa nhóm cột điểm'),
           content: SingleChildScrollView(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: nameController,
@@ -564,33 +614,90 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                 ),
                 const SizedBox(height: 12),
                 const Text("Danh sách cột và trọng số:", style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                ...List.generate(columnControllers.length, (index) {
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: columnControllers[index],
-                          decoration: const InputDecoration(labelText: 'Tên cột'),
+                ...List.generate(fields.length, (index) {
+                  final field = fields[index];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: field['col'],
+                            decoration: const InputDecoration(labelText: 'Tên cột'),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: weightControllers[index],
-                          decoration: const InputDecoration(labelText: 'Trọng số'),
-                          keyboardType: TextInputType.number,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: field['weight'],
+                            decoration: const InputDecoration(labelText: 'Trọng số'),
+                            keyboardType: TextInputType.number,
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        // Mũi tên lên/xuống sát nhau
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.arrow_upward),
+                              onPressed: index > 0
+                                  ? () {
+                                setState(() {
+                                  final temp = fields[index - 1];
+                                  fields[index - 1] = fields[index];
+                                  fields[index] = temp;
+                                });
+                              }
+                                  : null,
+                            ),
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.arrow_downward),
+                              onPressed: index < fields.length - 1
+                                  ? () {
+                                setState(() {
+                                  final temp = fields[index + 1];
+                                  fields[index + 1] = fields[index];
+                                  fields[index] = temp;
+                                });
+                              }
+                                  : null,
+                            ),
+                          ],
+                        ),
+                        // Nút xoá
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: fields.length > 1
+                              ? () => setState(() => fields.removeAt(index))
+                              : null,
+                          tooltip: "Xoá",
+                        ),
+                      ],
+                    ),
                   );
+
                 }),
                 Align(
                   alignment: Alignment.centerRight,
                   child: IconButton(
                     icon: const Icon(Icons.add_circle, color: Colors.green),
                     tooltip: 'Thêm cột',
-                    onPressed: () => setState(addColumnField),
+                    onPressed: () {
+                      setState(() {
+                        fields.add({
+                          'col': TextEditingController(),
+                          'weight': TextEditingController(),
+                        });
+                      });
+                    },
                   ),
                 ),
               ],
@@ -601,13 +708,10 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
             ElevatedButton(
               onPressed: () async {
                 final name = nameController.text.trim();
-                final cols = columnControllers.map((c) => c.text.trim()).toList();
-                final ws = weightControllers.map((w) => num.tryParse(w.text.trim()) ?? 0).toList();
+                final columns = fields.map((f) => f['col']!.text.trim()).toList();
+                final weights = fields.map((f) => num.tryParse(f['weight']!.text.trim()) ?? 0).toList();
 
-                if (name.isNotEmpty &&
-                    cols.isNotEmpty &&
-                    !cols.any((c) => c.isEmpty) &&
-                    cols.length == ws.length) {
+                if (name.isNotEmpty && columns.isNotEmpty && !columns.any((c) => c.isEmpty)) {
                   final uid = FirebaseAuth.instance.currentUser!.uid;
                   await FirebaseFirestore.instance
                       .collection('users')
@@ -618,8 +722,8 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                       .doc(groupId)
                       .update({
                     'groupName': name,
-                    'columns': cols,
-                    'weights': ws,
+                    'columns': columns,
+                    'weights': weights,
                   });
                   Navigator.pop(context);
                   await loadGradeGroups();
@@ -633,6 +737,8 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
       ),
     );
   }
+
+
 
 
   Future<void> deleteGradeGroup(String groupId) async {
@@ -831,11 +937,18 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
             const CircularProgressIndicator()
           else
             Expanded(
-              child: ListView(
-                children: [
-                  ...groupedSubjectWidgets(),
-                  ...ungroupedSubjectWidgets(),
-                ],
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  setState(() => isLoading = true);
+                  await loadAllData();
+                },
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(), // đảm bảo có thể kéo dù không đủ chiều cao
+                  children: [
+                    ...groupedSubjectWidgets(),
+                    ...ungroupedSubjectWidgets(),
+                  ],
+                ),
               ),
             ),
         ],

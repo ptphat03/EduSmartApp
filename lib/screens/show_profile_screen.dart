@@ -116,92 +116,99 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: CircleAvatar(
-                radius: 60,
-                backgroundColor: Colors.grey[200],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: Text(
-                (userInfo?['user_display_name']?.toString().trim().isNotEmpty ?? false)
-                    ? userInfo!['user_display_name']
-                    : 'Chưa đặt tên',
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    buildInfoRow("Email", userInfo?['user_name'] ?? '(Chưa có)'),
-                    buildInfoRow("SĐT", userInfo?['user_phone']),
-                    buildInfoRow("Giới tính", userInfo?['user_gender']),
-                    buildInfoRow(
-                      "Ngày sinh",
-                      (() {
-                        final timestamp = userInfo?['user_dob'];
-                        if (timestamp == null) return '(Chưa có)';
-                        try {
-                          final date = (timestamp as Timestamp).toDate();
-                          return DateFormat('dd/MM/yyyy').format(date);
-                        } catch (_) {
-                          return '(Lỗi định dạng)';
-                        }
-                      })(),
-                    ),
-                  ],
+          : RefreshIndicator(
+        onRefresh: () async {
+          setState(() => isLoading = true);
+          await loadUserData();
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: CircleAvatar(
+                  radius: 60,
+                  backgroundColor: Colors.grey[200],
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            ...students.map((student) => Card(
-              margin: const EdgeInsets.only(bottom: 16),
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("🎓 Thông tin học sinh", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    const Divider(),
-                    buildInfoRow("Họ tên", student['student_name']),
-                    buildInfoRow("Giới tính", student['student_gender']),
-                    buildInfoRow(
-                      "Ngày sinh",
-                      (() {
-                        final timestamp = student['student_dob'];
-                        if (timestamp == null) return '(Chưa có)';
-                        try {
-                          final date = (timestamp as Timestamp).toDate();
-                          return DateFormat('dd/MM/yyyy').format(date);
-                        } catch (_) {
-                          return '(Lỗi định dạng)';
-                        }
-                      })(),
-                    ),
-                    buildInfoRow("SĐT", student['student_phone']),
-                    buildInfoRow("Trường", student['student_school']),
-                  ],
+              const SizedBox(height: 12),
+              Center(
+                child: Text(
+                  (userInfo?['user_display_name']?.toString().trim().isNotEmpty ?? false)
+                      ? userInfo!['user_display_name']
+                      : 'Chưa đặt tên',
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
               ),
-            )),
-
-          ],
+              const SizedBox(height: 20),
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      buildInfoRow("Email", userInfo?['user_name'] ?? '(Chưa có)'),
+                      buildInfoRow("SĐT", userInfo?['user_phone']),
+                      buildInfoRow("Giới tính", userInfo?['user_gender']),
+                      buildInfoRow(
+                        "Ngày sinh",
+                        (() {
+                          final timestamp = userInfo?['user_dob'];
+                          if (timestamp == null) return '(Chưa có)';
+                          try {
+                            final date = (timestamp as Timestamp).toDate();
+                            return DateFormat('dd/MM/yyyy').format(date);
+                          } catch (_) {
+                            return '(Lỗi định dạng)';
+                          }
+                        })(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...students.map((student) => Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("🎓 Thông tin học sinh", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      const Divider(),
+                      buildInfoRow("Họ tên", student['student_name']),
+                      buildInfoRow("Giới tính", student['student_gender']),
+                      buildInfoRow(
+                        "Ngày sinh",
+                        (() {
+                          final timestamp = student['student_dob'];
+                          if (timestamp == null) return '(Chưa có)';
+                          try {
+                            final date = (timestamp as Timestamp).toDate();
+                            return DateFormat('dd/MM/yyyy').format(date);
+                          } catch (_) {
+                            return '(Lỗi định dạng)';
+                          }
+                        })(),
+                      ),
+                      buildInfoRow("SĐT", student['student_phone']),
+                      buildInfoRow("Trường", student['student_school']),
+                    ],
+                  ),
+                ),
+              )),
+            ],
+          ),
         ),
       ),
+
     );
   }
 }

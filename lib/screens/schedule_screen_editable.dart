@@ -218,9 +218,15 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
           ),
           const SizedBox(height: 10),
           Expanded(
-            child: ListView.builder(
-              itemCount: weekDates.length,
-              itemBuilder: (context, index) {
+            child: RefreshIndicator(
+              onRefresh: () async {
+                setState(() => isLoading = true);
+                await loadStudentsFromFirebase();
+              },
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(), // đảm bảo luôn kéo được
+                itemCount: weekDates.length,
+                itemBuilder: (context, index) {
                 final date = weekDates[index];
                 final dateKey = DateFormat('yyyy-MM-dd').format(date);
                 final lessons = student.timetable[dateKey] ?? [];
@@ -377,6 +383,7 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                   ],
                 );
               },
+              ),
             ),
           ),
         ],
@@ -472,9 +479,10 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
           padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+            child: SingleChildScrollView( // THÊM NÀY
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 const Text("Thông tin buổi học", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 for (var entry in controllers.entries)
@@ -600,6 +608,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                   ],
                 )
               ],
+              ),
             ),
           ),
         ),
