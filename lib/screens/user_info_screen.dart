@@ -5,6 +5,9 @@ import 'student_info_screen.dart';
 import 'welcome_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart'; // thêm dòng này ở đầu
+import 'map_picker_screen.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 class UserInfoScreen extends StatefulWidget {
   const UserInfoScreen({super.key});
 
@@ -20,6 +23,11 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
   DateTime? selectedDob;
   String gender = 'Nam';
   bool isLoading = false;
+  final addressController = TextEditingController();
+  LatLng? selectedLocation; // Tọa độ từ Google Map
+  final searchController = TextEditingController();
+  List<dynamic> suggestions = [];
+
 
   Future<void> saveUserInfo() async {
     final phone = phoneController.text.trim();
@@ -57,6 +65,11 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
       'user_display_name': display_name,
       'user_gender': gender,
       'user_dob': Timestamp.fromDate(selectedDob!),
+      'user_address': addressController.text,
+      'user_location': selectedLocation != null
+          ? GeoPoint(selectedLocation!.latitude, selectedLocation!.longitude)
+          : null,
+
     };
     try {
       await FirebaseFirestore.instance
@@ -91,6 +104,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
     }
   }
 
+
   void handleDobInput(String value) {
     try {
       final parts = value.split('/');
@@ -115,21 +129,21 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         title: const Text(
-        "Thông tin người dùng",
-        style: TextStyle(
-        color: Colors.white,
-        fontSize: 24, // 👈 chỉnh cỡ chữ
-        fontWeight: FontWeight.bold, // 👈 tô đậm
+          "Thông tin người dùng",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24, // 👈 chỉnh cỡ chữ
+            fontWeight: FontWeight.bold, // 👈 tô đậm
           ),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-              );
-            },
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+            );
+          },
         ),
       ),
       body: Center(
@@ -198,6 +212,32 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
                         .toList(),
                     onChanged: (value) => setState(() => gender = value ?? 'Nam'),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: addressController,
+                    decoration: InputDecoration(
+                      labelText: 'Địa chỉ',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.location_on),
+                      suffixIcon: IconButton(
+                        icon: Icon(Icons.map),
+                        onPressed: () async {
+                          // Chuyển sang màn chọn địa điểm
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const MapPickerScreen(initialLocation: null, editable: true)),
+                          );
+                          if (result != null && result is Map<String, dynamic>) {
+                            setState(() {
+                              addressController.text = result['placeName'];
+                              selectedLocation = result['latlng'];
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,

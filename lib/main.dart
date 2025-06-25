@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-// import 'screens/login_screen.dart';
+import 'screens/login_screen.dart';
 import 'screens/test.dart';
 
 void main() async {
@@ -21,6 +21,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
+      // home: const LoginScreenTest(),
       home: const LoginScreen(),
     );
   }

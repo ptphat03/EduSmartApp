@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'edit_profile_screen.dart';
 import 'package:intl/intl.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'edit_profile_screen.dart';
+import 'map_picker_screen.dart'; // ✅ dùng map_picker_screen
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,28 +17,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? userInfo;
   List<Map<String, dynamic>> students = [];
   bool isLoading = true;
-
-  Widget buildInfoRow(String label, dynamic value) {
-    final text = value?.toString().trim();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "$label: ",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          Expanded(
-            child: Text(
-              (text != null && text.isNotEmpty) ? text : "(Chưa có)",
-              style: const TextStyle(fontSize: 16),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   void initState() {
@@ -65,7 +45,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .get();
 
       final userData = userDoc.data() ?? {};
-      final studentList = studentSnapshot.docs.map((doc) => doc.data()).toList();
+      final studentList = studentSnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
 
       setState(() {
         userInfo = userData;
@@ -81,6 +65,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void openMapScreen({
+    required GeoPoint? currentLocation,
+    required String title,
+    required Function(GeoPoint location, String placeName) onPicked,
+  }) async {
+    LatLng? initial;
+
+    if (currentLocation != null) {
+      initial = LatLng(currentLocation.latitude, currentLocation.longitude);
+    }
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapPickerScreen(
+          initialLocation: initial,
+          editable: true,
+          title: title,
+        ),
+      ),
+    );
+
+    if (result != null && result is Map) {
+      final LatLng? latlng = result['latlng'];
+      final String? placeName = result['placeName'];
+      if (latlng != null && placeName != null) {
+        onPicked(GeoPoint(latlng.latitude, latlng.longitude), placeName);
+      }
+    }
+  }
+
+
+  Widget buildInfoRow(String label, dynamic value, {VoidCallback? onTap}) {
+    final text = value?.toString().trim();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "$label: ",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: onTap,
+              child: Text(
+                (text != null && text.isNotEmpty) ? text : "(Chưa có)",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                  fontWeight: onTap != null ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -151,7 +195,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      buildInfoRow("Email", userInfo?['user_name'] ?? '(Chưa có)'),
+                      buildInfoRow("Email", userInfo?['user_name']),
                       buildInfoRow("SĐT", userInfo?['user_phone']),
                       buildInfoRow("Giới tính", userInfo?['user_gender']),
                       buildInfoRow(
@@ -167,6 +211,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           }
                         })(),
                       ),
+                      buildInfoRow(
+                        "Địa chỉ",
+                        userInfo?['user_address'],
+                        onTap: () => openMapScreen(
+                          currentLocation: userInfo?['user_location'],
+                          title: "Chọn vị trí người dùng",
+                          onPicked: (newLoc, newAddress) async {
+                            final uid = FirebaseAuth.instance.currentUser?.uid;
+                            if (uid != null) {
+                              await FirebaseFirestore.instance.collection('users').doc(uid).update({
+                                'user_location': newLoc,
+                                'user_address': newAddress,
+                              });
+                              loadUserData();
+                            }
+                          },
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -181,7 +243,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("🎓 Thông tin học sinh", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      const Text("🎓 Thông tin học sinh",
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                       const Divider(),
                       buildInfoRow("Họ tên", student['student_name']),
                       buildInfoRow("Giới tính", student['student_gender']),
@@ -199,7 +262,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         })(),
                       ),
                       buildInfoRow("SĐT", student['student_phone']),
-                      buildInfoRow("Trường", student['student_school']),
+                      buildInfoRow(
+                        "Địa chỉ",
+                        student['student_address'],
+                        onTap: () => openMapScreen(
+                          currentLocation: student['student_location'],
+                          title: "Chọn vị trí học sinh",
+                          onPicked: (newLoc, newAddress) async {
+                            final uid = FirebaseAuth.instance.currentUser?.uid;
+                            final studentId = student['id'];
+                            if (uid != null && studentId != null) {
+                              await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(uid)
+                                  .collection('students')
+                                  .doc(studentId)
+                                  .update({
+                                'student_location': newLoc,
+                                'student_address': newAddress,
+                              });
+                              loadUserData();
+                            }
+                          },
+                        ),
+                      ),
+                      buildInfoRow(
+                        "Trường",
+                        student['student_school'],
+                        onTap: () => openMapScreen(
+                          currentLocation: student['student_school_location'],
+                          title: "Chọn vị trí trường học",
+                          onPicked: (newLoc, newAddress) async {
+                            final uid = FirebaseAuth.instance.currentUser?.uid;
+                            final studentId = student['id'];
+                            if (uid != null && studentId != null) {
+                              await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(uid)
+                                  .collection('students')
+                                  .doc(studentId)
+                                  .update({
+                                'student_school_location': newLoc,
+                                'student_school': newAddress,
+                              });
+                              loadUserData();
+                            }
+                          },
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -208,7 +318,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ),
-
     );
   }
 }

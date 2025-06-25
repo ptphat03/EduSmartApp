@@ -5,7 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'main_navigation_screen.dart';
 import 'user_info_screen.dart';
-import 'package:flutter/services.dart'; // thêm dòng này ở đầu
+import 'map_picker_screen.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class StudentInfoScreen extends StatefulWidget {
   const StudentInfoScreen({super.key});
@@ -19,6 +20,11 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
   final dobController = TextEditingController();
   final schoolController = TextEditingController();
   final phoneController = TextEditingController();
+  final addressController = TextEditingController();
+
+  LatLng? selectedLocation;           // địa chỉ
+  LatLng? selectedSchoolLocation;     // tọa độ trường học
+
   DateTime? selectedDob;
   String gender = 'Nam';
   bool isLoading = false;
@@ -57,8 +63,9 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
     final name = studentNameController.text.trim();
     final school = schoolController.text.trim();
     final phone = phoneController.text.trim();
+    final address = addressController.text.trim();
 
-    if (name.isEmpty) {
+    if (name.isEmpty || address.isEmpty || school.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Vui lòng điền đầy đủ thông tin.')),
       );
@@ -87,8 +94,15 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
       'student_name': name,
       'student_dob': Timestamp.fromDate(selectedDob!),
       'student_phone': phone,
-      'student_school': school,
       'student_gender': gender,
+      'student_school': school,
+      'student_school_location': selectedSchoolLocation != null
+          ? GeoPoint(selectedSchoolLocation!.latitude, selectedSchoolLocation!.longitude)
+          : null,
+      'student_address': address,
+      'student_location': selectedLocation != null
+          ? GeoPoint(selectedLocation!.latitude, selectedLocation!.longitude)
+          : null,
       'created_at': FieldValue.serverTimestamp(),
     };
 
@@ -97,7 +111,7 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
           .collection('users')
           .doc(user.uid)
           .collection('students')
-          .add(data); // Lưu vào subcollection students của user
+          .add(data);
 
       Navigator.pushReplacement(
         context,
@@ -112,6 +126,15 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    studentNameController.dispose();
+    dobController.dispose();
+    schoolController.dispose();
+    phoneController.dispose();
+    addressController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,10 +143,7 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
       appBar: AppBar(
         title: const Text(
           "Thông tin học sinh",
-          style: TextStyle(
-            fontSize: 24, // bạn có thể chỉnh to hơn nếu cần, ví dụ 22
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
@@ -137,7 +157,6 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
           },
         ),
       ),
-
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -182,8 +201,8 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
                     keyboardType: TextInputType.datetime,
                     decoration: InputDecoration(
                       labelText: 'Ngày sinh (dd/MM/yyyy)',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.cake),
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.cake),
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.calendar_today),
                         onPressed: () => selectDate(context),
@@ -201,18 +220,55 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
                     ),
                     keyboardType: TextInputType.phone,
                     inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly, // Chỉ cho phép nhập 0–9
+                      FilteringTextInputFormatter.digitsOnly,
                     ],
                   ),
                   const SizedBox(height: 12),
-
-
                   TextField(
                     controller: schoolController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: "Trường học",
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.school),
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.school),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.map),
+                        onPressed: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const MapPickerScreen(initialLocation: null, editable: true)),
+                          );
+                          if (result != null && result is Map<String, dynamic>) {
+                            setState(() {
+                              schoolController.text = result['placeName'];
+                              selectedSchoolLocation = result['latlng'];
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: addressController,
+                    decoration: InputDecoration(
+                      labelText: 'Địa chỉ',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.location_on),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.map),
+                        onPressed: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const MapPickerScreen(initialLocation: null, editable: true)),
+                          );
+                          if (result != null && result is Map<String, dynamic>) {
+                            setState(() {
+                              addressController.text = result['placeName'];
+                              selectedLocation = result['latlng'];
+                            });
+                          }
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -233,12 +289,11 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        foregroundColor: Colors.white, // giúp icon và ripple effect cũng màu trắng
+                        foregroundColor: Colors.white,
                         textStyle: const TextStyle(fontSize: 18),
                       ),
                     ),
                   )
-
                 ],
               ),
             ),

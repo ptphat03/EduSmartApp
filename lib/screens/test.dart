@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'main_navigation_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class LoginScreenTest extends StatefulWidget {
+  const LoginScreenTest({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<LoginScreenTest> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreenTest> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController(text: "tanphatphan2003@gmail.com");
   final _passwordController = TextEditingController(text: "phat12345");
