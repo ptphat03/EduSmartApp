@@ -22,7 +22,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       // home: const LoginScreenTest(),
-      home: const LoginScreen(),
+      home: const LoginScreenTest(),
     );
   }
 }

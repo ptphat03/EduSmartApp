@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'custom_address_picker.dart';
 
 class EditableScheduleScreen extends StatefulWidget {
   const EditableScheduleScreen({super.key});
@@ -57,6 +58,8 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
       setState(() => isLoading = false);
     }
   }
+
+
 
   List<DateTime> getCurrentWeekDates() {
     return List.generate(7, (i) => currentWeekStart.add(Duration(days: i)));
@@ -227,162 +230,189 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                 physics: const AlwaysScrollableScrollPhysics(), // đảm bảo luôn kéo được
                 itemCount: weekDates.length,
                 itemBuilder: (context, index) {
-                final date = weekDates[index];
-                final dateKey = DateFormat('yyyy-MM-dd').format(date);
-                final lessons = student.timetable[dateKey] ?? [];
+                  final date = weekDates[index];
+                  final dateKey = DateFormat('yyyy-MM-dd').format(date);
+                  final lessons = student.timetable[dateKey] ?? [];
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      color: Colors.grey.shade200,
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '${DateFormat('d/M').format(date)} ${DateFormat('E').format(date)}',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                          if (isEditMode)
-                            IconButton(
-                              icon: const Icon(Icons.add_circle, color: Colors.blue),
-                              onPressed: () => _addLesson(date),
-                            )
-                        ],
-                      ),
-                    ),
-                    if (lessons.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                        child: Text("— Không có lịch học", style: TextStyle(color: Colors.grey)),
-                      )
-                    else
-                      ...List.generate(lessons.length, (i) {
-                        final lesson = lessons[i];
-                        return Card(
-                          elevation: 4,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.schedule, color: Colors.blueAccent),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          '${lesson['start'] ?? ''} - ${lesson['end'] ?? ''}',
-                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                                        ),
-                                      ],
-                                    ),
-                                    if (isEditMode)
-                                      IconButton(
-                                        icon: const Icon(Icons.edit, color: Colors.deepOrange),
-                                        onPressed: () => _addLesson(date, i),
-                                        tooltip: 'Chỉnh sửa',
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.meeting_room_outlined, size: 20, color: Colors.grey),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        'Phòng: ${lesson['room'] ?? ''}',
-                                        style: const TextStyle(fontSize: 15),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.book_outlined, size: 20, color: Colors.grey),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        'Môn: ${lesson['subject'] ?? ''}',
-                                        style: const TextStyle(fontSize: 15),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.person_outline, size: 20, color: Colors.grey),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        'Giảng viên: ${lesson['lecturer'] ?? ''}',
-                                        style: const TextStyle(fontSize: 15),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.note_alt_outlined, size: 20, color: Colors.grey),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        'Ghi chú: ${lesson['notes'] ?? ''}',
-                                        style: const TextStyle(fontSize: 15),
-                                      ),
-                                    ),
-                                    if (isEditMode)
-                                      IconButton(
-                                        icon: const Icon(Icons.delete, color: Colors.red),
-                                        tooltip: 'Xoá',
-                                        onPressed: () async {
-                                          final confirmed = await showDialog<bool>(
-                                            context: context,
-                                            builder: (ctx) => AlertDialog(
-                                              title: const Text('Xác nhận xoá'),
-                                              content: const Text('Bạn có chắc muốn xoá buổi học này?'),
-                                              actions: [
-                                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Huỷ')),
-                                                ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Xoá')),
-                                              ],
-                                            ),
-                                          );
-                                          if (confirmed == true) {
-                                            setState(() => student.timetable[dateKey]!.removeAt(i));
-                                            final uid = FirebaseAuth.instance.currentUser?.uid;
-                                            if (uid != null) {
-                                              final studentRef = FirebaseFirestore.instance
-                                                  .collection('users')
-                                                  .doc(uid)
-                                                  .collection('students')
-                                                  .doc(student.id);
-                                              await studentRef.set({'timetable': student.timetable}, SetOptions(merge: true));
-                                            }
-                                          }
-                                        },
-                                      ),
-                                  ],
-                                ),
-                              ],
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        color: Colors.grey.shade200,
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${DateFormat('d/M').format(date)} ${DateFormat('E').format(date)}',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                             ),
-                          ),
-                        );
+                            if (isEditMode)
+                              IconButton(
+                                icon: const Icon(Icons.add_circle, color: Colors.blue),
+                                onPressed: () => _addLesson(date),
+                              )
+                          ],
+                        ),
+                      ),
+                      if (lessons.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                          child: Text("— Không có lịch học", style: TextStyle(color: Colors.grey)),
+                        )
+                      else
+                        ...List.generate(lessons.length, (i) {
+                          final lesson = lessons[i];
+                          return Card(
+                            elevation: 4,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.schedule, color: Colors.blueAccent),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '${lesson['start'] ?? ''} - ${lesson['end'] ?? ''}',
+                                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                          ),
+                                        ],
+                                      ),
+                                      if (isEditMode)
+                                        IconButton(
+                                          icon: const Icon(Icons.edit, color: Colors.deepOrange),
+                                          onPressed: () => _addLesson(date, i),
+                                          tooltip: 'Chỉnh sửa',
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.meeting_room_outlined, size: 20, color: Colors.grey),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'Phòng: ${lesson['room'] ?? ''}',
+                                          style: const TextStyle(fontSize: 15),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.book_outlined, size: 20, color: Colors.grey),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'Môn: ${lesson['subject'] ?? ''}',
+                                          style: const TextStyle(fontSize: 15),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.person_outline, size: 20, color: Colors.grey),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'Giảng viên: ${lesson['lecturer'] ?? ''}',
+                                          style: const TextStyle(fontSize: 15),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.note_alt_outlined, size: 20, color: Colors.grey),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'Ghi chú: ${lesson['notes'] ?? ''}',
+                                          style: const TextStyle(fontSize: 15),
+                                        ),
+                                      ),
+                                      if (isEditMode)
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.red),
+                                          tooltip: 'Xoá',
+                                          onPressed: () async {
+                                            final confirmed = await showDialog<bool>(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                title: const Text('Xác nhận xoá'),
+                                                content: const Text('Bạn có chắc muốn xoá buổi học này?'),
+                                                actions: [
+                                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Huỷ')),
+                                                  ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Xoá')),
+                                                ],
+                                              ),
+                                            );
+                                            if (confirmed == true) {
+                                              setState(() => student.timetable[dateKey]!.removeAt(i));
+                                              final uid = FirebaseAuth.instance.currentUser?.uid;
+                                              if (uid != null) {
+                                                final studentRef = FirebaseFirestore.instance
+                                                    .collection('users')
+                                                    .doc(uid)
+                                                    .collection('students')
+                                                    .doc(student.id);
+                                                await studentRef.set({'timetable': student.timetable}, SetOptions(merge: true));
+                                              }
+                                            }
+                                          },
+                                        ),
+                                    ],
+                                  ),
+                                  if ((lesson['fromAddress'] ?? '').isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.location_on_outlined, size: 20, color: Colors.grey),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text('Địa chỉ đi: ${lesson['fromAddress']}', style: const TextStyle(fontSize: 15)),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
 
-                      })
-                  ],
-                );
-              },
+                                  if ((lesson['toAddress'] ?? '').isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.location_on, size: 20, color: Colors.grey),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text('Địa chỉ về: ${lesson['toAddress']}', style: const TextStyle(fontSize: 15)),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+
+                        })
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -441,6 +471,9 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       'room': TextEditingController(text: widget.initialData?['room'] ?? ''),
       'lecturer': TextEditingController(text: widget.initialData?['lecturer'] ?? ''),
       'notes': TextEditingController(text: widget.initialData?['notes'] ?? ''),
+      'fromAddress': TextEditingController(text: widget.initialData?['fromAddress'] ?? ''),
+      'toAddress': TextEditingController(text: widget.initialData?['toAddress'] ?? ''),
+
     };
     selectedSubject = widget.initialData?['subject'];
     loadSubjects();
@@ -483,131 +516,189 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                const Text("Thông tin buổi học", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                for (var entry in controllers.entries)
+                  const Text("Thông tin buổi học", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  for (var entry in controllers.entries)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: TextFormField(
+                        controller: entry.value,
+                        readOnly: entry.key == 'start' || entry.key == 'end',
+                        onTap: entry.key == 'start' || entry.key == 'end' ? () => _pickTime(entry.key) : null,
+                        decoration: InputDecoration(
+                          labelText: _getLabel(entry.key),
+                          border: const OutlineInputBorder(),
+                        ),
+                        validator: (value) =>
+                        (entry.key == 'room' || entry.key == 'lecturer')
+                            ? null
+                            : (value == null || value.isEmpty ? 'Không được để trống' : null),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: subjectList.contains(selectedSubject) ? selectedSubject : null,
+                    items: [
+                      ...subjectList.map((s) => DropdownMenuItem(value: s, child: Text(s))),
+                      const DropdownMenuItem(value: '__add_new__', child: Text('➕ Thêm môn học mới')),
+                    ],
+                    onChanged: (value) async {
+                      if (value == '__add_new__') {
+                        final newSubject = await showDialog<String>(
+                          context: context,
+                          builder: (context) {
+                            final controller = TextEditingController();
+                            return AlertDialog(
+                              title: const Text('Thêm môn học mới'),
+                              content: TextField(
+                                controller: controller,
+                                decoration: const InputDecoration(hintText: 'Nhập tên môn học'),
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.pop(context, controller.text.trim()),
+                                  child: const Text('Lưu'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+
+                        if (newSubject != null && newSubject.isNotEmpty) {
+                          final uid = FirebaseAuth.instance.currentUser?.uid;
+                          if (uid != null) {
+                            final docRef = FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(uid)
+                                .collection('students')
+                                .doc(widget.studentId)
+                                .collection('subjects');
+
+                            final exists = await docRef.where('name', isEqualTo: newSubject).limit(1).get();
+                            if (exists.docs.isEmpty) {
+                              await docRef.add({'name': newSubject});
+                            }
+                          }
+                          subjectList.add(newSubject);
+                          setState(() => selectedSubject = newSubject);
+                        }
+                      } else {
+                        setState(() => selectedSubject = value);
+                      }
+                    },
+                    decoration: const InputDecoration(labelText: 'Môn học', border: OutlineInputBorder()),
+                    validator: (value) => value == null || value.isEmpty ? 'Chọn môn học' : null,
+                  ),
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: TextFormField(
-                      controller: entry.value,
-                      readOnly: entry.key == 'start' || entry.key == 'end',
-                      onTap: entry.key == 'start' || entry.key == 'end' ? () => _pickTime(entry.key) : null,
-                      decoration: InputDecoration(
-                        labelText: _getLabel(entry.key),
-                        border: const OutlineInputBorder(),
-                      ),
-                      validator: (value) =>
-                      (entry.key == 'room' || entry.key == 'lecturer')
-                          ? null
-                          : (value == null || value.isEmpty ? 'Không được để trống' : null),
-                    ),
-                  ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: subjectList.contains(selectedSubject) ? selectedSubject : null,
-                  items: [
-                    ...subjectList.map((s) => DropdownMenuItem(value: s, child: Text(s))),
-                    const DropdownMenuItem(value: '__add_new__', child: Text('➕ Thêm môn học mới')),
-                  ],
-                  onChanged: (value) async {
-                    if (value == '__add_new__') {
-                      final newSubject = await showDialog<String>(
-                        context: context,
-                        builder: (context) {
-                          final controller = TextEditingController();
-                          return AlertDialog(
-                            title: const Text('Thêm môn học mới'),
-                            content: TextField(
-                              controller: controller,
-                              decoration: const InputDecoration(hintText: 'Nhập tên môn học'),
-                            ),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(context, controller.text.trim()),
-                                child: const Text('Lưu'),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-
-                      if (newSubject != null && newSubject.isNotEmpty) {
-                        final uid = FirebaseAuth.instance.currentUser?.uid;
-                        if (uid != null) {
-                          final docRef = FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(uid)
-                              .collection('students')
-                              .doc(widget.studentId)
-                              .collection('subjects');
-
-                          final exists = await docRef.where('name', isEqualTo: newSubject).limit(1).get();
-                          if (exists.docs.isEmpty) {
-                            await docRef.add({'name': newSubject});
-                          }
-                        }
-                        subjectList.add(newSubject);
-                        setState(() => selectedSubject = newSubject);
-                      }
-                    } else {
-                      setState(() => selectedSubject = value);
-                    }
-                  },
-                  decoration: const InputDecoration(labelText: 'Môn học', border: OutlineInputBorder()),
-                  validator: (value) => value == null || value.isEmpty ? 'Chọn môn học' : null,
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Ghi chú', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        spacing: 8,
-                        children: ['Kiểm tra', 'Thuyết trình', 'Thi'].map((note) => ActionChip(
-                          label: Text(note),
-                          onPressed: () => setState(() => controllers['notes']!.text = note),
-                        )).toList(),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: controllers['notes'],
-                        decoration: const InputDecoration(
-                          labelText: 'Nhập ghi chú',
-                          border: OutlineInputBorder(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Ghi chú', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 8,
+                          children: ['Kiểm tra', 'Thuyết trình', 'Thi'].map((note) => ActionChip(
+                            label: Text(note),
+                            onPressed: () => setState(() => controllers['notes']!.text = note),
+                          )).toList(),
                         ),
-                      )
-                    ],
-                  ),
-                ),
-
-
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text("Hủy")),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (_formKey.currentState!.validate()) {
-                          Navigator.pop(context, {
-                            'start': controllers['start']!.text,
-                            'end': controllers['end']!.text,
-                            'room': controllers['room']!.text,
-                            'lecturer': controllers['lecturer']!.text,
-                            'subject': selectedSubject,
-                            'notes': controllers['notes']!.text,
-                          });
-                        }
-                      },
-                      child: const Text("Lưu"),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: controllers['notes'],
+                          decoration: const InputDecoration(
+                            labelText: 'Nhập ghi chú',
+                            border: OutlineInputBorder(),
+                          ),
+                        )
+                      ],
                     ),
-                  ],
-                )
-              ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.location_on_outlined),
+                            label: Text(
+                              controllers['fromAddress']!.text.isNotEmpty
+                                  ? "Đi: ${controllers['fromAddress']!.text}"
+                                  : "Chọn địa chỉ đi",
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onPressed: () async {
+                              final result = await Navigator.push<Map<String, String>>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const CustomAddressPickerScreen(title: "Chọn địa chỉ đi và về"),
+                                ),
+                              );
+                              if (result != null) {
+                                setState(() {
+                                  controllers['fromAddress']!.text = result['from'] ?? '';
+                                  controllers['toAddress']!.text = result['to'] ?? '';
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.location_on),
+                            label: Text(
+                              controllers['toAddress']!.text.isNotEmpty
+                                  ? "Về: ${controllers['toAddress']!.text}"
+                                  : "Chọn địa chỉ về",
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onPressed: () async {
+                              final result = await Navigator.push<Map<String, String>>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const CustomAddressPickerScreen(title: "Chọn địa chỉ đi và về"),
+                                ),
+                              );
+                              if (result != null) {
+                                setState(() {
+                                  controllers['fromAddress']!.text = result['from'] ?? '';
+                                  controllers['toAddress']!.text = result['to'] ?? '';
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(onPressed: () => Navigator.pop(context), child: const Text("Hủy")),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (_formKey.currentState!.validate()) {
+                            Navigator.pop(context, {
+                              'start': controllers['start']!.text,
+                              'end': controllers['end']!.text,
+                              'room': controllers['room']!.text,
+                              'lecturer': controllers['lecturer']!.text,
+                              'subject': selectedSubject,
+                              'notes': controllers['notes']!.text,
+                              'fromAddress': controllers['fromAddress']!.text,
+                              'toAddress': controllers['toAddress']!.text,
+                            });
+                          }
+                        },
+                        child: const Text("Lưu"),
+                      ),
+                    ],
+                  )
+                ],
               ),
             ),
           ),

@@ -833,8 +833,8 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.check, color: Colors.green),
-                        tooltip: 'Tắt chỉnh sửa điểm',
+                          icon: const Icon(Icons.check, color: Colors.green),
+                          tooltip: 'Tắt chỉnh sửa điểm',
                           onPressed: () async {
                             final uid = FirebaseAuth.instance.currentUser?.uid;
                             final student = selectedStudent;
@@ -942,8 +942,41 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                   setState(() => isLoading = true);
                   await loadAllData();
                 },
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(), // đảm bảo có thể kéo dù không đủ chiều cao
+                child: studentSubjects.isEmpty
+                    ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          "Chưa có bảng điểm nào",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black54,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.add),
+                          label: const Text("Thêm môn học mới"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: showSubjectManagerDialog,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                    : ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   children: [
                     ...groupedSubjectWidgets(),
                     ...ungroupedSubjectWidgets(),
@@ -1160,7 +1193,6 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
       }),
     ];
   }
-
 }
 
 class Student {
