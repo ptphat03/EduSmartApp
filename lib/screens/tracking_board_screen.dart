@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'map_simulation_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'custom_address_picker.dart'; // 👈 Import màn chọn địa chỉ
-
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 class TrackingBoardScreen extends StatefulWidget {
   const TrackingBoardScreen({super.key});
 
@@ -42,8 +42,11 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
                 status: lesson['status'] ?? 'waiting',
                 fromAddress: lesson['fromAddress'] ?? '',
                 toAddress: lesson['toAddress'] ?? '',
+                fromLatLng: lesson['fromLatLng'] ?? '',
+                toLatLng: lesson['toLatLng'] ?? '',
                 date: day,
               ));
+
             }
           }
         }
@@ -103,38 +106,38 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
               },
             ),
             const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const MapScreen()),
-                );
-              },
-              child: Container(
-                height: 180,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: const LinearGradient(
-                    colors: [Colors.lightBlueAccent, Colors.white],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.map, size: 48, color: Colors.grey),
-                    SizedBox(height: 8),
-                    Text("🌍 Bản đồ giả lập", style: TextStyle(fontSize: 16)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
+            // GestureDetector(
+            //   onTap: () {
+            //     Navigator.push(
+            //       context,
+            //       MaterialPageRoute(builder: (context) => const MapScreen()),
+            //     );
+            //   },
+            //   child: Container(
+            //     height: 180,
+            //     decoration: BoxDecoration(
+            //       borderRadius: BorderRadius.circular(16),
+            //       gradient: const LinearGradient(
+            //         colors: [Colors.lightBlueAccent, Colors.white],
+            //         begin: Alignment.topLeft,
+            //         end: Alignment.bottomRight,
+            //       ),
+            //       boxShadow: [
+            //         BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
+            //       ],
+            //     ),
+            //     alignment: Alignment.center,
+            //     child: const Column(
+            //       mainAxisAlignment: MainAxisAlignment.center,
+            //       children: [
+            //         Icon(Icons.map, size: 48, color: Colors.grey),
+            //         SizedBox(height: 8),
+            //         Text("🌍 Bản đồ giả lập", style: TextStyle(fontSize: 16)),
+            //       ],
+            //     ),
+            //   ),
+            // ),
+            // const SizedBox(height: 16),
             ...studentsByDate.entries.map((entry) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,6 +160,17 @@ class StudentCard extends StatelessWidget {
   final Student student;
 
   const StudentCard({super.key, required this.student});
+  LatLng? _parseLatLng(String input) {
+    try {
+      final parts = input.split(',');
+      if (parts.length == 2) {
+        final lat = double.parse(parts[0]);
+        final lng = double.parse(parts[1]);
+        return LatLng(lat, lng);
+      }
+    } catch (_) {}
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +195,12 @@ class StudentCard extends StatelessWidget {
                     final result = await Navigator.push<Map<String, String>>(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const CustomAddressPickerScreen(title: "Chọn địa chỉ"),
+                        builder: (_) => CustomAddressPickerScreen(
+                          title: "Chọn địa chỉ",
+                          initialFrom: _parseLatLng(student.fromLatLng),
+                          initialTo: _parseLatLng(student.toLatLng),
+                        ),
+
                       ),
                     );
                     if (result != null) {
@@ -221,7 +240,10 @@ class Student {
   final String status;
   final String fromAddress;
   final String toAddress;
+  final String fromLatLng;
+  final String toLatLng;
   final String date;
+
 
   Student({
     required this.id,
@@ -232,5 +254,8 @@ class Student {
     required this.fromAddress,
     required this.toAddress,
     required this.date,
+    required this.fromLatLng,
+    required this.toLatLng,
+
   });
 }

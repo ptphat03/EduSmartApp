@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'custom_address_picker.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class EditableScheduleScreen extends StatefulWidget {
   const EditableScheduleScreen({super.key});
@@ -404,6 +405,9 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                         ],
                                       ),
                                     ),
+
+
+
                                 ],
                               ),
                             ),
@@ -473,10 +477,24 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       'notes': TextEditingController(text: widget.initialData?['notes'] ?? ''),
       'fromAddress': TextEditingController(text: widget.initialData?['fromAddress'] ?? ''),
       'toAddress': TextEditingController(text: widget.initialData?['toAddress'] ?? ''),
+      'fromLatLng': TextEditingController(text: widget.initialData?['fromLatLng'] ?? ''),
+      'toLatLng': TextEditingController(text: widget.initialData?['toLatLng'] ?? ''),
+
 
     };
     selectedSubject = widget.initialData?['subject'];
     loadSubjects();
+  }
+  LatLng? _parseLatLng(String input) {
+    try {
+      final parts = input.split(',');
+      if (parts.length == 2) {
+        final lat = double.parse(parts[0]);
+        final lng = double.parse(parts[1]);
+        return LatLng(lat, lng);
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<void> loadSubjects() async {
@@ -512,30 +530,41 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
           padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
-            child: SingleChildScrollView( // THÊM NÀY
+            child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text("Thông tin buổi học", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
+
+                  // 👉 Các trường thông thường (ẩn fromLatLng và toLatLng)
                   for (var entry in controllers.entries)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: TextFormField(
-                        controller: entry.value,
-                        readOnly: entry.key == 'start' || entry.key == 'end',
-                        onTap: entry.key == 'start' || entry.key == 'end' ? () => _pickTime(entry.key) : null,
-                        decoration: InputDecoration(
-                          labelText: _getLabel(entry.key),
-                          border: const OutlineInputBorder(),
+                    if (entry.key != 'fromLatLng' &&
+                        entry.key != 'toLatLng' &&
+                        entry.key != 'notes' &&
+                        entry.key != 'fromAddress' &&
+                        entry.key != 'toAddress')
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: TextFormField(
+                          controller: entry.value,
+                          readOnly: entry.key == 'start' || entry.key == 'end',
+                          onTap: entry.key == 'start' || entry.key == 'end'
+                              ? () => _pickTime(entry.key)
+                              : null,
+                          decoration: InputDecoration(
+                            labelText: _getLabel(entry.key),
+                            border: const OutlineInputBorder(),
+                          ),
+                          validator: (value) => (entry.key == 'room' || entry.key == 'lecturer')
+                              ? null
+                              : (value == null || value.isEmpty ? 'Không được để trống' : null),
                         ),
-                        validator: (value) =>
-                        (entry.key == 'room' || entry.key == 'lecturer')
-                            ? null
-                            : (value == null || value.isEmpty ? 'Không được để trống' : null),
                       ),
-                    ),
+
                   const SizedBox(height: 8),
+
+                  // 👉 Dropdown môn học
                   DropdownButtonFormField<String>(
                     value: subjectList.contains(selectedSubject) ? selectedSubject : null,
                     items: [
@@ -564,7 +593,6 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                             );
                           },
                         );
-
                         if (newSubject != null && newSubject.isNotEmpty) {
                           final uid = FirebaseAuth.instance.currentUser?.uid;
                           if (uid != null) {
@@ -574,7 +602,6 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                                 .collection('students')
                                 .doc(widget.studentId)
                                 .collection('subjects');
-
                             final exists = await docRef.where('name', isEqualTo: newSubject).limit(1).get();
                             if (exists.docs.isEmpty) {
                               await docRef.add({'name': newSubject});
@@ -590,6 +617,8 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                     decoration: const InputDecoration(labelText: 'Môn học', border: OutlineInputBorder()),
                     validator: (value) => value == null || value.isEmpty ? 'Chọn môn học' : null,
                   ),
+
+                  // 👉 Ghi chú
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Column(
@@ -611,10 +640,12 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                             labelText: 'Nhập ghi chú',
                             border: OutlineInputBorder(),
                           ),
-                        )
+                        ),
                       ],
                     ),
                   ),
+
+                  // 👉 2 ICON CHỌN VỊ TRÍ (đặt tại đây sau notes)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Row(
@@ -632,13 +663,19 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                               final result = await Navigator.push<Map<String, String>>(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => const CustomAddressPickerScreen(title: "Chọn địa chỉ đi và về"),
+                                  builder: (_) => CustomAddressPickerScreen(
+                                    title: "Chọn địa chỉ đi và về",
+                                    initialFrom: _parseLatLng(controllers['fromLatLng']!.text),
+                                    initialTo: _parseLatLng(controllers['toLatLng']!.text),
+                                  ),
                                 ),
                               );
                               if (result != null) {
                                 setState(() {
                                   controllers['fromAddress']!.text = result['from'] ?? '';
                                   controllers['toAddress']!.text = result['to'] ?? '';
+                                  controllers['fromLatLng']!.text = result['fromLatLng'] ?? '';
+                                  controllers['toLatLng']!.text = result['toLatLng'] ?? '';
                                 });
                               }
                             },
@@ -658,13 +695,19 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                               final result = await Navigator.push<Map<String, String>>(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => const CustomAddressPickerScreen(title: "Chọn địa chỉ đi và về"),
+                                  builder: (_) => CustomAddressPickerScreen(
+                                    title: "Chọn địa chỉ đi và về",
+                                    initialFrom: _parseLatLng(controllers['fromLatLng']!.text),
+                                    initialTo: _parseLatLng(controllers['toLatLng']!.text),
+                                  ),
                                 ),
                               );
                               if (result != null) {
                                 setState(() {
                                   controllers['fromAddress']!.text = result['from'] ?? '';
                                   controllers['toAddress']!.text = result['to'] ?? '';
+                                  controllers['fromLatLng']!.text = result['fromLatLng'] ?? '';
+                                  controllers['toLatLng']!.text = result['toLatLng'] ?? '';
                                 });
                               }
                             },
@@ -673,6 +716,22 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                       ],
                     ),
                   ),
+
+                  // 👉 Hiển thị fromAddress và toAddress nếu cần
+                  for (var entry in controllers.entries)
+                    if (entry.key == 'fromAddress' || entry.key == 'toAddress')
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: TextFormField(
+                          controller: entry.value,
+                          readOnly: true, // không cho sửa bằng tay
+                          decoration: InputDecoration(
+                            labelText: _getLabel(entry.key),
+                            border: const OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -691,6 +750,8 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                               'notes': controllers['notes']!.text,
                               'fromAddress': controllers['fromAddress']!.text,
                               'toAddress': controllers['toAddress']!.text,
+                              'fromLatLng': controllers['fromLatLng']!.text,
+                              'toLatLng': controllers['toLatLng']!.text,
                             });
                           }
                         },
@@ -706,6 +767,8 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       ),
     );
   }
+
+
 
   String _getLabel(String key) {
     switch (key) {
