@@ -3,6 +3,8 @@ import 'map_simulation_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'custom_address_picker.dart'; // 👈 Import màn chọn địa chỉ
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:intl/intl.dart';
+
 class TrackingBoardScreen extends StatefulWidget {
   const TrackingBoardScreen({super.key});
 
@@ -14,6 +16,7 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
   List<Student> allStudents = [];
   String? selectedStudentId;
   Map<String, String> studentIdNameMap = {};
+  DateTime currentDate = DateTime.now();
 
   Future<void> fetchStudents() async {
     final snapshot = await FirebaseFirestore.instance.collection('users').get();
@@ -46,13 +49,12 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
                 toLatLng: lesson['toLatLng'] ?? '',
                 date: day,
               ));
-
             }
           }
         }
       }
     }
-
+    if (!mounted) return;
     setState(() {
       allStudents = students;
       studentIdNameMap = idNameMap;
@@ -68,14 +70,14 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
     fetchStudents();
   }
 
+  String get formattedCurrentDate => DateFormat('dd/MM/yyyy').format(currentDate);
+
   @override
   Widget build(BuildContext context) {
-    final filteredStudents = allStudents.where((s) => s.id == selectedStudentId).toList();
-
-    final studentsByDate = <String, List<Student>>{};
-    for (var student in filteredStudents) {
-      studentsByDate.putIfAbsent(student.date, () => []).add(student);
-    }
+    final filteredStudents = allStudents.where((s) =>
+    s.id == selectedStudentId &&
+        s.date == DateFormat('yyyy-MM-dd').format(currentDate)
+    ).toList();
 
     return Scaffold(
       body: Container(
@@ -106,55 +108,62 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
               },
             ),
             const SizedBox(height: 12),
-            // GestureDetector(
-            //   onTap: () {
-            //     Navigator.push(
-            //       context,
-            //       MaterialPageRoute(builder: (context) => const MapScreen()),
-            //     );
-            //   },
-            //   child: Container(
-            //     height: 180,
-            //     decoration: BoxDecoration(
-            //       borderRadius: BorderRadius.circular(16),
-            //       gradient: const LinearGradient(
-            //         colors: [Colors.lightBlueAccent, Colors.white],
-            //         begin: Alignment.topLeft,
-            //         end: Alignment.bottomRight,
-            //       ),
-            //       boxShadow: [
-            //         BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
-            //       ],
-            //     ),
-            //     alignment: Alignment.center,
-            //     child: const Column(
-            //       mainAxisAlignment: MainAxisAlignment.center,
-            //       children: [
-            //         Icon(Icons.map, size: 48, color: Colors.grey),
-            //         SizedBox(height: 8),
-            //         Text("🌍 Bản đồ giả lập", style: TextStyle(fontSize: 16)),
-            //       ],
-            //     ),
-            //   ),
-            // ),
-            // const SizedBox(height: 16),
-            ...studentsByDate.entries.map((entry) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("📅 Ngày: ${entry.key}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  ...entry.value.map((s) => StudentCard(student: s)).toList(),
-                  const SizedBox(height: 20),
-                ],
-              );
-            }),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_left),
+                  onPressed: () {
+                    setState(() {
+                      currentDate = currentDate.subtract(const Duration(days: 1));
+                    });
+                  },
+                ),
+                Text(
+                  formattedCurrentDate,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_right),
+                  onPressed: () {
+                    setState(() {
+                      currentDate = currentDate.add(const Duration(days: 1));
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Hiển thị danh sách học sinh theo ngày
+            if (filteredStudents.isEmpty)
+              const Center(child: Text("Không có lịch học cho ngày này"))
+            else
+              ...(() {
+                final sortedStudents = [...filteredStudents];
+                sortedStudents.sort((a, b) => a.startTime.compareTo(b.startTime));
+                return sortedStudents.map((s) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 4),
+                      child: Text(
+                        "⏰ ${s.startTime} - ${s.endTime}",
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                    ),
+                    StudentCard(student: s),
+                  ],
+                )).toList();
+              })(),
           ],
         ),
       ),
+
     );
   }
 }
+
 
 class StudentCard extends StatelessWidget {
   final Student student;
@@ -180,11 +189,9 @@ class StudentCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
         leading: const CircleAvatar(radius: 20),
-        title: Text(student.name, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("⏰ Thời gian: ${student.startTime} - ${student.endTime}"),
             if (student.fromAddress.isNotEmpty) Text("🚩 Đi: ${student.fromAddress}"),
             if (student.toAddress.isNotEmpty) Text("🏁 Đến: ${student.toAddress}"),
             const SizedBox(height: 8),

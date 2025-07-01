@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'custom_address_picker.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'notification_service.dart';
 
 class EditableScheduleScreen extends StatefulWidget {
   const EditableScheduleScreen({super.key});
@@ -46,12 +47,19 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
           parsedTimetable[date] = List<Map<String, dynamic>>.from(sessions);
         });
 
+        // ✅ THÊM GỌI LỊCH THÔNG BÁO
+        for (final entry in parsedTimetable.entries) {
+          scheduleLessons(entry.value, entry.key);
+        }
+
         return Student(
           id: doc.id,
           name: data['student_name'] ?? 'Không tên',
           timetable: parsedTimetable,
         );
       }).toList();
+
+
 
       setState(() => isLoading = false);
     } catch (e) {
@@ -60,6 +68,53 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
     }
   }
 
+  void scheduleLessons(List<Map<String, dynamic>> lessons, String dateStr) {
+    for (int i = 0; i < lessons.length; i++) {
+      final lesson = lessons[i];
+      final start = lesson['start'];
+      final end = lesson['end'];
+      final subject = lesson['subject'] ?? 'Buổi học';
+      final notes = lesson['notes'] ?? '';
+
+      try {
+        final formattedStart = start.toString().padLeft(5, '0');
+        final scheduledStart = DateFormat('yyyy-MM-dd HH:mm').parse('$dateStr $formattedStart');
+        final now = DateTime.now();
+        print('⏰ Thời gian hiện tại: $now');
+        print('📅 Thời gian buổi học bắt đầu: $scheduledStart');
+
+        if (scheduledStart.isAfter(now)) {
+          NotificationService().scheduleNotification(
+            id: scheduledStart.millisecondsSinceEpoch.remainder(100000),
+            title: "Nhắc học: $subject",
+            body: notes.isNotEmpty ? notes : "Đến giờ học lúc $start",
+            scheduledTime: scheduledStart,
+          );
+        }
+      } catch (e) {
+        print("Lỗi khi đặt lịch thông báo bắt đầu cho $dateStr $start: $e");
+      }
+
+      try {
+        final formattedEnd = end.toString().padLeft(5, '0');
+        final scheduledEnd = DateFormat('yyyy-MM-dd HH:mm').parse('$dateStr $formattedEnd');
+        final now = DateTime.now();
+        print('⏰ Thời gian hiện tại: $now');
+        print('📅 Thời gian buổi học kết thúc: $scheduledEnd');
+
+        if (scheduledEnd.isAfter(now)) {
+          NotificationService().scheduleNotification(
+            id: scheduledEnd.millisecondsSinceEpoch.remainder(100000) + 1, // tránh trùng id
+            title: "Kết thúc: $subject",
+            body: "Buổi học kết thúc lúc $end",
+            scheduledTime: scheduledEnd,
+          );
+        }
+      } catch (e) {
+        print("Lỗi khi đặt lịch thông báo kết thúc cho $dateStr $end: $e");
+      }
+    }
+  }
 
 
   List<DateTime> getCurrentWeekDates() {
@@ -159,25 +214,10 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'refresh') {
-                      loadStudentsFromFirebase();
-                    } else if (value == 'edit') {
-                      setState(() => isEditMode = !isEditMode);
-                    }
-                  },
-                  icon: const Icon(Icons.more_vert),
-                  itemBuilder: (context) => [
-                    PopupMenuItem<String>(
-                      value: 'edit',
-                      child: Text(isEditMode ? 'Tắt chỉnh sửa' : 'Bật chỉnh sửa'),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'refresh',
-                      child: Text('Làm mới'),
-                    ),
-                  ],
+                IconButton(
+                  icon: Icon(isEditMode ? Icons.edit_off : Icons.edit, color: Colors.blueAccent),
+                  tooltip: isEditMode ? 'Tắt chỉnh sửa' : 'Bật chỉnh sửa',
+                  onPressed: () => setState(() => isEditMode = !isEditMode),
                 ),
               ],
             ),
@@ -514,11 +554,15 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
     } catch (_) {
       initial = now;
     }
+
     final picked = await showTimePicker(context: context, initialTime: initial);
     if (picked != null) {
-      setState(() => controllers[key]?.text = picked.format(context));
+      final hourStr = picked.hour.toString().padLeft(2, '0');
+      final minuteStr = picked.minute.toString().padLeft(2, '0');
+      setState(() => controllers[key]?.text = '$hourStr:$minuteStr');
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

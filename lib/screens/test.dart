@@ -1,108 +1,84 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'main_navigation_screen.dart';
-
-class LoginScreenTest extends StatefulWidget {
-  const LoginScreenTest({super.key});
-
-  @override
-  State<LoginScreenTest> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreenTest> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: "tanphatphan2003@gmail.com");
-  final _passwordController = TextEditingController(text: "phat12345");
-
-  bool _isLoading = false;
-  bool _obscurePassword = true;
-
-  Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      String message = switch (e.code) {
-        'user-not-found' => 'No user found with this email.',
-        'wrong-password' => 'Wrong password.',
-        'invalid-email' => 'Invalid email format.',
-        _ => 'Login failed. ${e.message}'
-      };
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Email Field
-                TextFormField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (value) =>
-                  (value == null || value.isEmpty) ? 'Enter your email' : null,
-                ),
-                const SizedBox(height: 16),
-
-                // Password Field
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                      ),
-                      onPressed: () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
-                    ),
-                  ),
-                  validator: (value) =>
-                  (value == null || value.isEmpty) ? 'Enter your password' : null,
-                ),
-                const SizedBox(height: 24),
-
-                // Login Button or Loading
-                _isLoading
-                    ? const CircularProgressIndicator()
-                    : ElevatedButton(
-                  onPressed: _login,
-                  child: const Text("Login"),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+//
+// import 'package:flutter/material.dart';
+// import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+// import 'package:timezone/data/latest.dart' as tz;
+// import 'package:timezone/timezone.dart' as tz;
+// import '../main.dart';
+//
+// class ScheduleNotificationScreen extends StatefulWidget {
+//   const ScheduleNotificationScreen({super.key});
+//
+//   @override
+//   State<ScheduleNotificationScreen> createState() =>
+//       _ScheduleNotificationScreenState();
+// }
+//
+// class _ScheduleNotificationScreenState
+//     extends State<ScheduleNotificationScreen> {
+//   DateTime? selectedDateTime;
+//
+//   @override
+//   void initState() {
+//     super.initState();
+//     tz.initializeTimeZones();
+//   }
+//
+//   Future<void> _scheduleNotification(DateTime scheduledTime) async {
+//     final tz.TZDateTime tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
+//     await flutterLocalNotificationsPlugin.zonedSchedule(
+//       scheduledTime.millisecondsSinceEpoch ~/ 1000,
+//       'Lịch học sắp tới',
+//       'Sự kiện bắt đầu lúc ${scheduledTime.hour}:${scheduledTime.minute.toString().padLeft(2, '0')}',
+//       tzTime,
+//       const NotificationDetails(
+//         android: AndroidNotificationDetails(
+//           'schedule_channel',
+//           'Lịch học',
+//           importance: Importance.max,
+//           priority: Priority.high,
+//         ),
+//       ),
+//       androidAllowWhileIdle: true,
+//       uiLocalNotificationDateInterpretation:
+//       UILocalNotificationDateInterpretation.absoluteTime,
+//       matchDateTimeComponents: DateTimeComponents.dateAndTime,
+//     );
+//   }
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(title: const Text("Hẹn giờ thông báo")),
+//       body: Center(
+//         child: ElevatedButton(
+//           child: const Text("Chọn thời gian"),
+//           onPressed: () async {
+//             final now = DateTime.now();
+//             final selected = await showDatePicker(
+//               context: context,
+//               initialDate: now,
+//               firstDate: now,
+//               lastDate: now.add(const Duration(days: 30)),
+//             );
+//             if (selected != null) {
+//               final time = await showTimePicker(
+//                 context: context,
+//                 initialTime: TimeOfDay.now(),
+//               );
+//               if (time != null) {
+//                 final dt = DateTime(
+//                   selected.year,
+//                   selected.month,
+//                   selected.day,
+//                   time.hour,
+//                   time.minute,
+//                 );
+//                 await _scheduleNotification(dt);
+//               }
+//             }
+//           },
+//         ),
+//       ),
+//     );
+//   }
+// }
