@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'custom_address_picker.dart'; // 👈 Import màn chọn địa chỉ
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'live_tracking_map_screen.dart';
 
 class TrackingBoardScreen extends StatefulWidget {
   const TrackingBoardScreen({super.key});
@@ -135,7 +137,6 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
             ),
             const SizedBox(height: 8),
 
-            // Hiển thị danh sách học sinh theo ngày
             if (filteredStudents.isEmpty)
               const Center(child: Text("Không có lịch học cho ngày này"))
             else
@@ -159,16 +160,15 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
           ],
         ),
       ),
-
     );
   }
 }
-
 
 class StudentCard extends StatelessWidget {
   final Student student;
 
   const StudentCard({super.key, required this.student});
+
   LatLng? _parseLatLng(String input) {
     try {
       final parts = input.split(',');
@@ -207,28 +207,98 @@ class StudentCard extends StatelessWidget {
                           initialFrom: _parseLatLng(student.fromLatLng),
                           initialTo: _parseLatLng(student.toLatLng),
                         ),
-
                       ),
                     );
+
                     if (result != null) {
-                      // Có thể xử lý dữ liệu trả về nếu cần
+                      final fromAddress = result['from'];
+                      final toAddress = result['to'];
+                      final fromLatLngString = result['fromLatLng'] as String?;
+                      final toLatLngString = result['toLatLng'] as String?;
+
+                      if (fromLatLngString != null &&
+                          toLatLngString != null &&
+                          fromAddress != null &&
+                          toAddress != null) {
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user == null) return;
+
+                        final uid = user.uid;
+                        final studentRef = FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(uid)
+                            .collection('students')
+                            .doc(student.id);
+
+                        final studentDoc = await studentRef.get();
+                        if (!studentDoc.exists) return;
+
+                        final data = studentDoc.data()!;
+                        final timetable = data['timetable'] as Map<String, dynamic>?;
+
+                        if (timetable != null && timetable.containsKey(student.date)) {
+                          final lessons = List<Map<String, dynamic>>.from(timetable[student.date]);
+
+                          for (int i = 0; i < lessons.length; i++) {
+                            final lesson = lessons[i];
+                            if (lesson['start'] == student.startTime && lesson['end'] == student.endTime) {
+                              // ✅ Cập nhật dữ liệu mới
+                              lessons[i]['fromAddress'] = fromAddress;
+                              lessons[i]['toAddress'] = toAddress;
+                              lessons[i]['fromLatLng'] = fromLatLngString;
+                              lessons[i]['toLatLng'] = toLatLngString;
+                              break;
+                            }
+                          }
+
+                          // ✅ Ghi ngược lại vào Firestore
+                          await studentRef.update({
+                            'timetable.${student.date}': lessons,
+                          });
+                        }
+                      }
                     }
                   },
+
                   icon: const Icon(Icons.edit_location),
                   label: const Text("Địa chỉ"),
                 ),
+
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () {
-                    // Điều hướng đến trang schedule tại ngày tương ứng
-                    // TODO: thay bằng Navigator.push với tham số cụ thể nếu bạn có màn hình Schedule
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Đi đến lịch ngày ${student.date}')), // placeholder
+                      SnackBar(content: Text('Đi đến lịch ngày ${student.date}')),
                     );
                   },
                   icon: const Icon(Icons.schedule),
                   label: const Text("Lịch"),
                 ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    final LatLng? destination = _parseLatLng(student.fromLatLng);
+                    if (destination == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("❌ Chưa có địa chỉ điểm đi")),
+                      );
+                      return;
+                    }
+
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LiveTrackingMapScreen(
+                          destination: destination,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.navigation),
+                  label: const Text("Theo dõi"),
+                ),
+
+
               ],
             ),
           ],
@@ -245,12 +315,11 @@ class Student {
   final String startTime;
   final String endTime;
   final String status;
-  final String fromAddress;
-  final String toAddress;
-  final String fromLatLng;
-  final String toLatLng;
+  String fromAddress;
+  String toAddress;
+  String fromLatLng;
+  String toLatLng;
   final String date;
-
 
   Student({
     required this.id,
@@ -263,6 +332,5 @@ class Student {
     required this.date,
     required this.fromLatLng,
     required this.toLatLng,
-
   });
 }

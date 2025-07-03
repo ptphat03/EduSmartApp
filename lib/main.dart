@@ -10,6 +10,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,13 +46,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'EduSmart',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-        useMaterial3: true,
-      ),
-      home: const LoginScreenTest(), // bạn có thể thay đổi màn hình test ở đây
+      navigatorKey: navigatorKey, // ✅ Thêm dòng này
+      title: 'Flutter Demo',
+      home: LoginScreenTest(), // hoặc màn hình chính bạn muốn
     );
   }
 }
+
