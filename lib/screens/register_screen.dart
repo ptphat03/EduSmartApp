@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'mail_verification_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -36,6 +37,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       final user = userCredential.user;
       if (user != null) {
+        // ✅ Thêm user vào Firestore với premium = false
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'uid': user.uid,
+          'email': user.email,
+          'user_display_name': user.displayName ?? '',
+          'user_gender': '',
+          'user_dob': '',
+          'user_address': '',
+          'premium': false, // ✅ Thêm premium false
+          'premiumActivatedAt': null, // ✅ Dành cho server update khi thanh toán
+        });
+
+        // Chuyển sang màn xác thực email
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -76,16 +90,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
         backgroundColor: primaryColor,
         elevation: 0,
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white), // <-- dòng này chỉnh màu icon
+        iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
           "Đăng ký",
           style: TextStyle(
             color: Colors.white,
-            fontSize: 24, // 👈 chỉnh cỡ chữ
-            fontWeight: FontWeight.bold,),
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
-
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -93,7 +107,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Image.asset(
-                "assets/images/logo_app.jpg", // Hoặc bạn có thể thay đổi hình riêng cho đăng ký
+                "assets/images/logo_app.jpg",
                 height: 180,
                 fit: BoxFit.contain,
               ),

@@ -9,13 +9,14 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
+import 'screens/payment_screen.dart';
 
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await NotificationService().init(); // ⬅ khởi tạo flutter_local_notifications
-
+  //await _initializeNotifications();
   runApp(const MyApp());
 }
 
@@ -51,7 +52,11 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
-      home: const LoginScreenTest(), // bạn có thể thay đổi màn hình test ở đây
+      home: const LoginScreenTest(),
+      routes: {
+        '/payment': (context) => const PaymentScreen(), // 👈 Thêm dòng này
+      },
     );
   }
 }
+

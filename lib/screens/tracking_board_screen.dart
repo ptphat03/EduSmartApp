@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'custom_address_picker.dart'; // 👈 Import màn chọn địa chỉ
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class TrackingBoardScreen extends StatefulWidget {
   const TrackingBoardScreen({super.key});
@@ -17,6 +18,38 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
   String? selectedStudentId;
   Map<String, String> studentIdNameMap = {};
   DateTime currentDate = DateTime.now();
+
+  bool? canAccess;
+
+  @override
+  void initState() {
+    super.initState();
+    checkPremiumStatus();
+  }
+
+  Future<void> checkPremiumStatus() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+      if (userDoc.exists) {
+        final isPremium = userDoc.get('is_premium') ?? false;
+        final Timestamp? expiredAt = userDoc.get('premium_expired_at');
+        if (isPremium && expiredAt != null && expiredAt.toDate().isAfter(DateTime.now())) {
+          setState(() {
+            canAccess = true;
+          });
+          fetchStudents();
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking premium: \$e");
+    }
+    setState(() {
+      canAccess = false;
+    });
+  }
 
   Future<void> fetchStudents() async {
     final snapshot = await FirebaseFirestore.instance.collection('users').get();
@@ -64,16 +97,44 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
     });
   }
 
-  @override
-  void initState() {
-    super.initState();
-    fetchStudents();
-  }
-
   String get formattedCurrentDate => DateFormat('dd/MM/yyyy').format(currentDate);
 
   @override
   Widget build(BuildContext context) {
+    if (canAccess == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!canAccess!) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("Theo dõi hành trình")),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.lock, size: 80, color: Colors.grey),
+              const SizedBox(height: 20),
+              const Text(
+                "Bạn cần thanh toán để sử dụng tính năng này",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  // TODO: Gọi hàm mở PayOS hoặc chuyển sang màn Payment
+                  Navigator.pushNamed(context, '/payment');
+                },
+                child: const Text("Thanh toán ngay"),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final filteredStudents = allStudents.where((s) =>
     s.id == selectedStudentId &&
         s.date == DateFormat('yyyy-MM-dd').format(currentDate)
@@ -134,8 +195,6 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
               ],
             ),
             const SizedBox(height: 8),
-
-            // Hiển thị danh sách học sinh theo ngày
             if (filteredStudents.isEmpty)
               const Center(child: Text("Không có lịch học cho ngày này"))
             else
@@ -159,10 +218,10 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
           ],
         ),
       ),
-
     );
   }
 }
+
 
 
 class StudentCard extends StatelessWidget {
