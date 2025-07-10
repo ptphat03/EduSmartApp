@@ -275,28 +275,28 @@ class StudentCard extends StatelessWidget {
                   label: const Text("Lịch"),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    final LatLng? destination = _parseLatLng(student.fromLatLng);
-                    if (destination == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("❌ Chưa có địa chỉ điểm đi")),
-                      );
-                      return;
-                    }
-
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => LiveTrackingMapScreen(
-                          destination: destination,
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.navigation),
-                  label: const Text("Theo dõi"),
-                ),
+                // ElevatedButton.icon(
+                //   onPressed: () {
+                //     final LatLng? destination = _parseLatLng(student.fromLatLng);
+                //     if (destination == null) {
+                //       ScaffoldMessenger.of(context).showSnackBar(
+                //         const SnackBar(content: Text("❌ Chưa có địa chỉ điểm đi")),
+                //       );
+                //       return;
+                //     }
+                //
+                //     Navigator.push(
+                //       context,
+                //       MaterialPageRoute(
+                //         builder: (_) => LiveTrackingMapScreen(
+                //           destination: destination,
+                //         ),
+                //       ),
+                //     );
+                //   },
+                //   icon: const Icon(Icons.navigation),
+                //   label: const Text("Theo dõi"),
+                // ),
 
 
               ],

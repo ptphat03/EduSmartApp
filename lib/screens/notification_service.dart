@@ -67,15 +67,29 @@ class NotificationService {
   }) async {
     await _notifications.zonedSchedule(
       id,
-      title,
-      body,
+      '📚 $title', // ví dụ: 📚 Toán học - Tiết 1
+      '⏰ $body',  // ví dụ: ⏰ Bắt đầu lúc 7:30 sáng, Phòng A101
       tz.TZDateTime.from(scheduledTime, tz.local),
-      const NotificationDetails(
+      NotificationDetails( // bỏ const vì có biến
         android: AndroidNotificationDetails(
-          'schedule_channel',
-          'Lịch học',
+          'schedule_channel', // ID kênh
+          'Lịch học',          // Tên hiển thị trong setting
+          channelDescription: 'Thông báo nhắc lịch học cho học sinh',
           importance: Importance.max,
           priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          enableLights: true,
+          visibility: NotificationVisibility.public,
+          ticker: 'Lịch học sắp tới',
+          icon: '@mipmap/ic_launcher',
+          colorized: true,
+          color: Color(0xFF2196F3), // Màu xanh dương đặc trưng cho học tập
+          styleInformation: BigTextStyleInformation(
+            '📌 $body\n',
+            contentTitle: '📚 $title',
+            summaryText: '🔔 Nhắc lịch học',
+          ),
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -83,6 +97,7 @@ class NotificationService {
       UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.dateAndTime,
     );
+
   }
 
   Future<void> showLiveTrackingNotification({
@@ -93,18 +108,31 @@ class NotificationService {
 
     await _notifications.zonedSchedule(
       999,
-      'Bắt đầu theo dõi',
-      'Nhấn để xem vị trí: $toLatLng',
+      '📍 Bắt đầu theo dõi học sinh',
+      '🚶 Theo dõi vị trí đến: $toLatLng\n➡️ Nhấn để mở bản đồ',
       scheduledTime,
-      const NotificationDetails(
+      NotificationDetails( // ❌ bỏ 'const' ở đây
         android: AndroidNotificationDetails(
           'tracking_channel_id',
-          'Live Tracking Notifications',
+          'Thông báo theo dõi trực tiếp',
+          channelDescription: 'Thông báo khi đến giờ theo dõi vị trí học sinh',
           importance: Importance.max,
           priority: Priority.high,
-          ticker: 'ticker',
-          ongoing: true,     // ✅ luôn hiển thị
-          autoCancel: false, // ✅ không tự đóng
+          ticker: 'Tracking Started',
+          ongoing: true,
+          autoCancel: false,
+          visibility: NotificationVisibility.public,
+          playSound: true,
+          enableLights: true,
+          colorized: true,
+          color: Color(0xFF4CAF50),
+          icon: '@mipmap/ic_launcher',
+          styleInformation: BigTextStyleInformation(
+            '🚶 Đã đến giờ theo dõi hành trình học sinh.\n'
+                '➡️ Nhấn vào đây để xem bản đồ với vị trí đến: $toLatLng',
+            contentTitle: '📍 Bắt đầu theo dõi',
+            summaryText: 'Tracking started • Live mode',
+          ),
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -112,6 +140,8 @@ class NotificationService {
       uiLocalNotificationDateInterpretation:
       UILocalNotificationDateInterpretation.absoluteTime,
     );
+
+
   }
 
 }

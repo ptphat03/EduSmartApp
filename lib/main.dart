@@ -4,6 +4,7 @@ import 'screens/login_screen.dart';
 import 'screens/login_test_screen.dart';
 import 'screens/test.dart';
 import 'screens/notification_service.dart';
+import 'screens/payment_screen.dart';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;

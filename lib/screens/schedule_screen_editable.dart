@@ -424,21 +424,21 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.info_outline, size: 20, color: Colors.grey),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Trạng thái: ${lesson['status'] ?? '—'}',
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: lesson['status'] == 'tracking' ? Colors.green : Colors.grey,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                  // const SizedBox(height: 6),
+                                  // Row(
+                                  //   children: [
+                                  //     const Icon(Icons.info_outline, size: 20, color: Colors.grey),
+                                  //     const SizedBox(width: 6),
+                                  //     Text(
+                                  //       'Trạng thái: ${lesson['status'] ?? '—'}',
+                                  //       style: TextStyle(
+                                  //         fontSize: 15,
+                                  //         color: lesson['status'] == 'tracking' ? Colors.green : Colors.grey,
+                                  //         fontWeight: FontWeight.w600,
+                                  //       ),
+                                  //     ),
+                                  //   ],
+                                  // ),
                                   const SizedBox(height: 6),
 
                                   Row(
@@ -504,7 +504,7 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                           const Icon(Icons.location_on_outlined, size: 20, color: Colors.grey),
                                           const SizedBox(width: 6),
                                           Expanded(
-                                            child: Text('Địa chỉ đi: ${lesson['fromAddress']}', style: const TextStyle(fontSize: 15)),
+                                            child: Text('Điểm đi: ${lesson['fromAddress']}', style: const TextStyle(fontSize: 15)),
                                           ),
                                         ],
                                       ),
@@ -518,7 +518,7 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                           const Icon(Icons.location_on, size: 20, color: Colors.grey),
                                           const SizedBox(width: 6),
                                           Expanded(
-                                            child: Text('Địa chỉ về: ${lesson['toAddress']}', style: const TextStyle(fontSize: 15)),
+                                            child: Text('Điểm đến: ${lesson['toAddress']}', style: const TextStyle(fontSize: 15)),
                                           ),
                                         ],
                                       ),

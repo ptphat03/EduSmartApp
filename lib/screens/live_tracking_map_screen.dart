@@ -237,23 +237,23 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
   Widget _buildInstructionPanel() {
     return Positioned(
-      top: 16,
+      top: 5,
       left: 16,
       right: 16,
       child: Material(
         elevation: 4,
         borderRadius: BorderRadius.circular(12),
-        color: Colors.green.shade700,
+        color: Colors.blue.shade700,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                instruction,
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
+              // Text(
+              //   instruction,
+              //   style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              // ),
+              // const SizedBox(height: 4),
               Text(
                 "ETA: $eta  •  $distance  •  Đến lúc: $arrivalTime",
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
@@ -268,6 +268,12 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text("📍 Theo dõi trực tiếp"),
+        backgroundColor: Colors.blue.shade700,
+        foregroundColor: Colors.white,
+        elevation: 2,
+      ),
       body: Stack(
         children: [
           currentLocation == null
