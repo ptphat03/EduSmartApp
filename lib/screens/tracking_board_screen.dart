@@ -38,7 +38,7 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
         final Timestamp? activateAt = userDoc.get('premiumActivatedAt');
         final Timestamp? expiredAt = userDoc.get('premiumExpiredAt');
 
-        if (isPremium && expiredAt != null && activateAt != null) {
+        if (isPremium == true && expiredAt != null && activateAt != null) {
           final now = DateTime.now();
           final activatedDate = activateAt.toDate();
           final expiredDate = expiredAt.toDate();
