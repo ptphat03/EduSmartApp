@@ -10,6 +10,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
+import 'screens/payment_screen.dart';
+import 'screens/tracking_board_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -47,10 +49,20 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: navigatorKey, // ✅ Thêm dòng này
-      title: 'Flutter Demo',
-      home: LoginScreenTest(), // hoặc màn hình chính bạn muốn
+      navigatorKey: navigatorKey,
+      // ✅ để điều hướng toàn cục nếu cần
+      title: 'EduSmart',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        useMaterial3: true,
+      ),
+      home: const LoginScreenTest(),
+      routes: {
+        '/payment': (context) => const PaymentScreen(),
+        '/tracking': (context) => const TrackingBoardScreen(), // 👈 Thêm route nếu cần// 👈 route thêm vào
+      },
     );
   }
-}
 
+}

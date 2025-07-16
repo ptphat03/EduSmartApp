@@ -20,6 +20,49 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
   Map<String, String> studentIdNameMap = {};
   DateTime currentDate = DateTime.now();
 
+  bool? canAccess;
+
+  @override
+  void initState() {
+    super.initState();
+    checkPremiumStatus();
+  }
+
+  Future<void> checkPremiumStatus() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+      if (userDoc.exists) {
+        final isPremium = userDoc.get('premium') ?? false;
+        final Timestamp? activateAt = userDoc.get('premiumActivatedAt');
+        final Timestamp? expiredAt = userDoc.get('premiumExpiredAt');
+
+        if (isPremium && expiredAt != null && activateAt != null) {
+          final now = DateTime.now();
+          final activatedDate = activateAt.toDate();
+          final expiredDate = expiredAt.toDate();
+
+          if (now.isAfter(activatedDate) && now.isBefore(expiredDate)) {
+            print("✅ Premium còn hiệu lực");
+            setState(() {
+              canAccess = true;
+            });
+            fetchStudents();
+            return;
+          } else {
+            print("❌ Premium đã hết hạn hoặc chưa bắt đầu");
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking premium: \$e");
+    }
+    setState(() {
+      canAccess = false;
+    });
+  }
+
   Future<void> fetchStudents() async {
     final snapshot = await FirebaseFirestore.instance.collection('users').get();
     final students = <Student>[];
@@ -66,16 +109,44 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
     });
   }
 
-  @override
-  void initState() {
-    super.initState();
-    fetchStudents();
-  }
-
   String get formattedCurrentDate => DateFormat('dd/MM/yyyy').format(currentDate);
 
   @override
   Widget build(BuildContext context) {
+    if (canAccess == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!canAccess!) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("Theo dõi hành trình")),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.lock, size: 80, color: Colors.grey),
+              const SizedBox(height: 20),
+              const Text(
+                "Bạn cần thanh toán để sử dụng tính năng này",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  // TODO: Gọi hàm mở PayOS hoặc chuyển sang màn Payment
+                  Navigator.pushNamed(context, '/payment');
+                },
+                child: const Text("Thanh toán ngay"),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final filteredStudents = allStudents.where((s) =>
     s.id == selectedStudentId &&
         s.date == DateFormat('yyyy-MM-dd').format(currentDate)
@@ -136,7 +207,6 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
               ],
             ),
             const SizedBox(height: 8),
-
             if (filteredStudents.isEmpty)
               const Center(child: Text("Không có lịch học cho ngày này"))
             else
@@ -160,15 +230,17 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
           ],
         ),
       ),
+
     );
   }
 }
+
+
 
 class StudentCard extends StatelessWidget {
   final Student student;
 
   const StudentCard({super.key, required this.student});
-
   LatLng? _parseLatLng(String input) {
     try {
       final parts = input.split(',');
@@ -207,98 +279,29 @@ class StudentCard extends StatelessWidget {
                           initialFrom: _parseLatLng(student.fromLatLng),
                           initialTo: _parseLatLng(student.toLatLng),
                         ),
+
                       ),
                     );
 
                     if (result != null) {
-                      final fromAddress = result['from'];
-                      final toAddress = result['to'];
-                      final fromLatLngString = result['fromLatLng'] as String?;
-                      final toLatLngString = result['toLatLng'] as String?;
-
-                      if (fromLatLngString != null &&
-                          toLatLngString != null &&
-                          fromAddress != null &&
-                          toAddress != null) {
-                        final user = FirebaseAuth.instance.currentUser;
-                        if (user == null) return;
-
-                        final uid = user.uid;
-                        final studentRef = FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(uid)
-                            .collection('students')
-                            .doc(student.id);
-
-                        final studentDoc = await studentRef.get();
-                        if (!studentDoc.exists) return;
-
-                        final data = studentDoc.data()!;
-                        final timetable = data['timetable'] as Map<String, dynamic>?;
-
-                        if (timetable != null && timetable.containsKey(student.date)) {
-                          final lessons = List<Map<String, dynamic>>.from(timetable[student.date]);
-
-                          for (int i = 0; i < lessons.length; i++) {
-                            final lesson = lessons[i];
-                            if (lesson['start'] == student.startTime && lesson['end'] == student.endTime) {
-                              // ✅ Cập nhật dữ liệu mới
-                              lessons[i]['fromAddress'] = fromAddress;
-                              lessons[i]['toAddress'] = toAddress;
-                              lessons[i]['fromLatLng'] = fromLatLngString;
-                              lessons[i]['toLatLng'] = toLatLngString;
-                              break;
-                            }
-                          }
-
-                          // ✅ Ghi ngược lại vào Firestore
-                          await studentRef.update({
-                            'timetable.${student.date}': lessons,
-                          });
-                        }
-                      }
+                      // Có thể xử lý dữ liệu trả về nếu cần
                     }
                   },
-
                   icon: const Icon(Icons.edit_location),
                   label: const Text("Địa chỉ"),
                 ),
-
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () {
+                    // Điều hướng đến trang schedule tại ngày tương ứng
+                    // TODO: thay bằng Navigator.push với tham số cụ thể nếu bạn có màn hình Schedule
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Đi đến lịch ngày ${student.date}')),
+                      SnackBar(content: Text('Đi đến lịch ngày ${student.date}')), // placeholder
                     );
                   },
                   icon: const Icon(Icons.schedule),
                   label: const Text("Lịch"),
                 ),
-                const SizedBox(width: 8),
-                // ElevatedButton.icon(
-                //   onPressed: () {
-                //     final LatLng? destination = _parseLatLng(student.fromLatLng);
-                //     if (destination == null) {
-                //       ScaffoldMessenger.of(context).showSnackBar(
-                //         const SnackBar(content: Text("❌ Chưa có địa chỉ điểm đi")),
-                //       );
-                //       return;
-                //     }
-                //
-                //     Navigator.push(
-                //       context,
-                //       MaterialPageRoute(
-                //         builder: (_) => LiveTrackingMapScreen(
-                //           destination: destination,
-                //         ),
-                //       ),
-                //     );
-                //   },
-                //   icon: const Icon(Icons.navigation),
-                //   label: const Text("Theo dõi"),
-                // ),
-
-
               ],
             ),
           ],
@@ -315,11 +318,12 @@ class Student {
   final String startTime;
   final String endTime;
   final String status;
-  String fromAddress;
-  String toAddress;
-  String fromLatLng;
-  String toLatLng;
+  final String fromAddress;
+  final String toAddress;
+  final String fromLatLng;
+  final String toLatLng;
   final String date;
+
 
   Student({
     required this.id,
@@ -332,5 +336,6 @@ class Student {
     required this.date,
     required this.fromLatLng,
     required this.toLatLng,
+
   });
 }

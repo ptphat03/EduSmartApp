@@ -4,6 +4,7 @@ import 'schedule_screen_editable.dart';
 import 'report_card_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/custom_app_bar.dart';
+import '../services/premium_service.dart'; // ✅ import service
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -48,7 +49,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         backgroundColor: Colors.blue[700],
         type: BottomNavigationBarType.fixed,
         selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
-        onTap: (index) {
+        onTap: (index) async {
+          if (index == 0) {
+            // ✅ Check Premium trước khi mở TrackingBoardScreen
+            bool isPremium = await PremiumService.isUserPremium();
+            if (!isPremium) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Bạn cần nâng cấp Premium để sử dụng tính năng bản đồ')),
+              );
+              return; // Không cho đổi tab
+            }
+          }
           setState(() {
             _currentIndex = index;
           });
