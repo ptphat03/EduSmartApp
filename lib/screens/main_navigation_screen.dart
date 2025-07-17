@@ -50,17 +50,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         type: BottomNavigationBarType.fixed,
         selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
         onTap: (index) async {
-          if (index == 0) {
-            // ✅ Check Premium trước khi mở TrackingBoardScreen
-            bool isPremium = await PremiumService.isUserPremium();
-            if (!isPremium) {
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Bạn cần nâng cấp Premium để sử dụng tính năng bản đồ')),
-              );
-              return; // Không cho đổi tab
-            }
-          }
+          // if (index == 0) {
+          //   // ✅ Check Premium trước khi mở TrackingBoardScreen
+          //   bool isPremium = await PremiumService.isUserPremium();
+          //   if (!isPremium) {
+          //     if (!mounted) return;
+          //     ScaffoldMessenger.of(context).showSnackBar(
+          //       const SnackBar(content: Text('Bạn cần nâng cấp Premium để sử dụng tính năng bản đồ')),
+          //     );
+          //     return; // Không cho đổi tab
+          //   }
+          // }
           setState(() {
             _currentIndex = index;
           });

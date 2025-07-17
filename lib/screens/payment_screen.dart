@@ -28,7 +28,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final userEmail = user.email ?? 'noemail@example.com';
 
       // Nếu bạn cần lấy thêm thông tin user từ Firestore:
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(
+          userId).get();
       final userData = userDoc.data();
       final nameFromProfile = userData?['name'] ?? userName;
 
@@ -41,6 +42,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final uri = Uri.parse(paymentUrl);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
+        Navigator.pop(context); // quay lại màn trước (ví dụ: TrackingBoardScreen)
       } else {
         throw 'Không thể mở link: $paymentUrl';
       }
@@ -59,14 +61,86 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Thanh toán Premium')),
+      appBar: AppBar(
+        title: const Text(
+          'Thanh toán',
+          style: TextStyle(
+            color: Colors.white,           // 🔹 Chữ trắng
+            fontWeight: FontWeight.bold,  // 🔹 In đậm
+            fontSize: 20,
+          ),
+        ),
+        backgroundColor: Colors.blue.shade700,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white), // 🔹 Mũi tên back màu trắng
+      ),
       body: Center(
-        child: isLoading
-            ? const CircularProgressIndicator()
-            : ElevatedButton.icon(
-          onPressed: createPaymentAndLaunch,
-          icon: const Icon(Icons.payment),
-          label: const Text('Thanh toán 20.000 VND'),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: isLoading
+              ? const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text("Đang tạo liên kết thanh toán...",
+                  style: TextStyle(fontSize: 16)),
+            ],
+          )
+              : Card(
+            elevation: 10,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.star, size: 80, color: Colors.blue),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Nâng cấp lên Premium",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "20.000đ/tháng\n"
+                        "Truy cập tính năng theo dõi hành trình",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.black87,
+                      fontWeight: FontWeight.bold, // 🔹 In đậm
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: createPaymentAndLaunch,
+                      icon: const Icon(Icons.payment, color: Colors.white),
+                      label: const Text(
+                        'Thanh toán ngay',
+                        style: TextStyle(fontSize: 16, color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade700,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
