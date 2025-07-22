@@ -5,48 +5,21 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'dart:async';
-import 'dart:math' as math;
 
 class LiveTrackingMapScreen extends StatefulWidget {
   final LatLng destination;
-  final Duration? eta; // ⬅ Thêm dòng này
+  final Duration? eta;
 
   const LiveTrackingMapScreen({
     super.key,
     required this.destination,
-    this.eta, // ⬅ Thêm dòng này
+    this.eta,
   });
 
   @override
   State<LiveTrackingMapScreen> createState() => _LiveTrackingMapScreenState();
 }
 
-class LiveTrackingController {
-  static Future<bool> startTracking(LatLng destination, Duration duration) async {
-    try {
-      final position = await Geolocator.getCurrentPosition();
-      final current = LatLng(position.latitude, position.longitude);
-
-      // Ước tính khoảng cách (đơn giản hóa)
-      final double distance = Geolocator.distanceBetween(
-          current.latitude, current.longitude, destination.latitude, destination.longitude);
-
-      final double estimatedDurationSec = distance / 1.5; // ví dụ: tốc độ trung bình 1.5 m/s
-
-      print("🟢 Bắt đầu tracking tới $destination, ETA: ${estimatedDurationSec ~/ 60} phút");
-
-      // Đếm ngược ETA hoặc chạy logic nào đó (có thể dùng Timer hoặc callback tùy bạn)
-      await Future.delayed(Duration(seconds: estimatedDurationSec.toInt()));
-
-      print("✅ Đã đến nơi hoặc hết thời gian");
-
-      return true;
-    } catch (e) {
-      print("❌ Lỗi tracking: $e");
-      return false;
-    }
-  }
-}
 class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   GoogleMapController? mapController;
   LatLng? currentLocation;
@@ -54,13 +27,11 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   Set<Marker> markers = {};
   StreamSubscription<Position>? positionSubscription;
   bool isTracking = false;
+  bool hasArrived = false;
   double heading = 0;
 
-  String instruction = "Hướng dẫn sẽ hiển thị ở đây";
-  String eta = "-- min";
+  String etaText = "--";
   String distance = "-- km";
-  String arrivalTime = "--:--";
-
   Timer? countdownTimer;
   Duration remainingTime = Duration.zero;
 
@@ -71,7 +42,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   }
 
   Future<void> _drawRoute(LatLng from, LatLng to) async {
-    const apiKey = 'AIzaSyDYVFN1cOdEHVPvEnkro8Jk79vK2zhisII'; // ← nhớ thay API key của bạn
+    const apiKey = 'AIzaSyDYVFN1cOdEHVPvEnkro8Jk79vK2zhisII';
     final url =
         'https://maps.googleapis.com/maps/api/directions/json?origin=${from.latitude},${from.longitude}&destination=${to.latitude},${to.longitude}&key=$apiKey&language=vi';
 
@@ -96,75 +67,9 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
       ));
 
       final leg = route['legs'][0];
-      instruction = leg['steps'][0]['html_instructions']
-          .replaceAll(RegExp(r'<[^>]*>'), '');
-      eta = leg['duration']['text'];
       distance = leg['distance']['text'];
-      arrivalTime = leg['arrival_time']?['text'] ?? '--:--';
-
-      // ✅ Đếm ngược ETA
-      remainingTime = _parseDurationFromText(eta);
-      countdownTimer?.cancel();
-      countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (remainingTime.inSeconds <= 0) {
-          timer.cancel();
-          if (isTracking) {
-            _stopTracking();
-            Navigator.pop(context, false); // ❌ Hết giờ chưa đến
-          }
-        } else {
-          setState(() {
-            remainingTime -= const Duration(seconds: 1);
-            eta = _formatDuration(remainingTime);
-          });
-        }
-      });
-// ✅ Đếm ngược ETA từ widget nếu được truyền vào
-      if (widget.eta != null) {
-        remainingTime = widget.eta!;
-        eta = _formatDuration(remainingTime);
-      } else {
-        remainingTime = _parseDurationFromText(eta);
-      }
-      countdownTimer?.cancel();
-      countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (remainingTime.inSeconds <= 0) {
-          timer.cancel();
-          if (isTracking) {
-            _stopTracking();
-            Navigator.pop(context, false); // ❌ Hết giờ chưa đến
-          }
-        } else {
-          setState(() {
-            remainingTime -= const Duration(seconds: 1);
-            eta = _formatDuration(remainingTime);
-          });
-        }
-      });
-
 
       setState(() {});
-    }
-  }
-
-  Duration _parseDurationFromText(String text) {
-    final RegExp regex = RegExp(r'(?:(\d+) giờ)? ?(?:(\d+) phút)?');
-    final match = regex.firstMatch(text);
-    if (match == null) return Duration.zero;
-
-    final hours = int.tryParse(match.group(1) ?? '0') ?? 0;
-    final minutes = int.tryParse(match.group(2) ?? '0') ?? 0;
-    return Duration(hours: hours, minutes: minutes);
-  }
-
-  String _formatDuration(Duration duration) {
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes % 60;
-    final seconds = duration.inSeconds % 60;
-    if (hours > 0) {
-      return '${hours}h ${minutes}m ${seconds}s';
-    } else {
-      return '${minutes}m ${seconds}s';
     }
   }
 
@@ -177,6 +82,27 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
     await _drawRoute(currentLocation!, widget.destination);
     _updateMarkers();
+
+    if (widget.eta != null) {
+      remainingTime = widget.eta!;
+      etaText = _formatDuration(remainingTime);
+      countdownTimer?.cancel();
+      countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (remainingTime.inSeconds <= 0) {
+          timer.cancel();
+          if (!hasArrived) {
+            print('❌ Quá ETA nhưng chưa tới nơi');
+            _stopTracking();
+            Navigator.pop(context, false);
+          }
+        } else {
+          setState(() {
+            remainingTime -= const Duration(seconds: 1);
+            etaText = _formatDuration(remainingTime);
+          });
+        }
+      });
+    }
 
     positionSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.best),
@@ -198,9 +124,11 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
         widget.destination.longitude,
       );
 
-      if (distanceToDestination <= 20) {
+      if (distanceToDestination <= 20 && !hasArrived) {
+        hasArrived = true;
+        print('✅ Đã đến đích');
         _stopTracking();
-        Navigator.pop(context, true); // ✅ Đã đến nơi
+        Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("🟢 Đã đến điểm đến")),
         );
@@ -235,6 +163,12 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     setState(() {});
   }
 
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes % 60;
+    final seconds = duration.inSeconds % 60;
+    return '${minutes}m ${seconds}s';
+  }
+
   Widget _buildInstructionPanel() {
     return Positioned(
       top: 5,
@@ -249,13 +183,8 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Text(
-              //   instruction,
-              //   style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-              // ),
-              // const SizedBox(height: 4),
               Text(
-                "ETA: $eta  •  $distance  •  Đến lúc: $arrivalTime",
+                "ETA: $etaText  •  $distance",
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
             ],
@@ -303,4 +232,3 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     super.dispose();
   }
 }
-

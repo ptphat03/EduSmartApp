@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import 'custom_address_picker.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'notification_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class EditableScheduleScreen extends StatefulWidget {
   const EditableScheduleScreen({super.key});
@@ -113,28 +115,43 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
               print('⏳ Hẹn giờ gửi thông báo live tracking sau ${delay.inSeconds} giây');
 
               Future.delayed(delay, () async {
-                final position = await Geolocator.getCurrentPosition();
-                final destination = lesson['toLatLng'].toString().split(',');
-                if (destination.length == 2) {
-                  final toLat = double.tryParse(destination[0]) ?? 0.0;
-                  final toLng = double.tryParse(destination[1]) ?? 0.0;
+                try {
+                  final current = await Geolocator.getCurrentPosition();
+                  final destinationStr = lesson['toLatLng'].toString().split(',');
 
-                  final distanceMeters = Geolocator.distanceBetween(
-                    position.latitude,
-                    position.longitude,
-                    toLat,
-                    toLng,
+                  if (destinationStr.length != 2) {
+                    print('❌ Sai định dạng toLatLng');
+                    return;
+                  }
+
+                  final toLat = double.tryParse(destinationStr[0]);
+                  final toLng = double.tryParse(destinationStr[1]);
+
+                  if (toLat == null || toLng == null) {
+                    print('❌ Không thể parse toLatLng');
+                    return;
+                  }
+
+                  print('🌍 Đang gọi Google Directions API...');
+                  final duration = await getTravelDuration(
+                    fromLat: current.latitude,
+                    fromLng: current.longitude,
+                    toLat: toLat,
+                    toLng: toLng,
+                    googleApiKey: 'AIzaSyDYVFN1cOdEHVPvEnkro8Jk79vK2zhisII', // 👈 nhớ thay bằng key thật
                   );
 
-                  final estimatedDuration = Duration(minutes: (distanceMeters / 50).round());
-
-                  print('📍 Gửi thông báo live tracking tới $toLat, $toLng — Ước lượng: $estimatedDuration');
-                  await NotificationService().showLiveTrackingNotification(
-                    toLatLng: lesson['toLatLng'],
-                    duration: estimatedDuration,
-                  );
-
-
+                  if (duration != null) {
+                    print('📍 Gửi thông báo live tracking tới $toLat, $toLng — Ước lượng: ${duration.inMinutes} phút');
+                    await NotificationService().showLiveTrackingNotification(
+                      toLatLng: '$toLat,$toLng',
+                      duration: duration,
+                    );
+                  } else {
+                    print('⚠️ Không thể lấy thời gian từ Google API');
+                  }
+                } catch (e) {
+                  print('❌ Lỗi khi xử lý live tracking: $e');
                 }
               });
             }
@@ -238,7 +255,41 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
       }
     }
   }
+  Future<Duration?> getTravelDuration({
+    required double fromLat,
+    required double fromLng,
+    required double toLat,
+    required double toLng,
+    required String googleApiKey,
+  }) async {
+    final url = Uri.parse(
+      'https://maps.googleapis.com/maps/api/directions/json'
+          '?origin=$fromLat,$fromLng'
+          '&destination=$toLat,$toLng'
+          '&mode=driving'
+          '&key=$googleApiKey',
+    );
 
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+
+      if (data['status'] == 'OK') {
+        final durationInSeconds =
+        data['routes'][0]['legs'][0]['duration']['value']; // 👈 thời gian giây
+        final readable = data['routes'][0]['legs'][0]['duration']['text'];
+        print('📦 Estimated duration: $readable');
+        return Duration(seconds: durationInSeconds);
+      } else {
+        print('❌ Google API error: ${data['status']}');
+      }
+    } else {
+      print('❌ Failed to fetch from Google API');
+    }
+
+    return null;
+  }
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -424,21 +475,6 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                       ),
                                     ],
                                   ),
-                                  // const SizedBox(height: 6),
-                                  // Row(
-                                  //   children: [
-                                  //     const Icon(Icons.info_outline, size: 20, color: Colors.grey),
-                                  //     const SizedBox(width: 6),
-                                  //     Text(
-                                  //       'Trạng thái: ${lesson['status'] ?? '—'}',
-                                  //       style: TextStyle(
-                                  //         fontSize: 15,
-                                  //         color: lesson['status'] == 'tracking' ? Colors.green : Colors.grey,
-                                  //         fontWeight: FontWeight.w600,
-                                  //       ),
-                                  //     ),
-                                  //   ],
-                                  // ),
                                   const SizedBox(height: 6),
 
                                   Row(
@@ -890,9 +926,8 @@ void checkAndNotifySchedule(DateTime start, String toLatLng) async {
       toLat,
       toLng,
     );
-    final estimatedDuration =
-    Duration(minutes: (distanceMeters / 50).round()); // giả định đi bộ 50m/phút
-
+    final estimatedDuration = Duration(seconds: 5);
+    // Duration(minutes: (distanceMeters / 50).round()); // giả định đi bộ 50m/phút
     await NotificationService().showLiveTrackingNotification(
       toLatLng: toLatLng,
       duration: estimatedDuration,

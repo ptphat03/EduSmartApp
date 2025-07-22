@@ -3,33 +3,34 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'live_tracking_map_screen.dart'; // 👈 đảm bảo import đúng
-import '../main.dart'; // 👈 chứa navigatorKey, chỉnh đường dẫn nếu cần
+import 'live_tracking_map_screen.dart';
+import '../main.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:async';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
 
 class NotificationService {
   static final _notifications = FlutterLocalNotificationsPlugin();
+  Timer? _countdownTimer;
 
   Future<void> init() async {
     tz.initializeTimeZones();
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const initSettings = InitializationSettings(
-      android: androidSettings,
-    );
+    const initSettings = InitializationSettings(android: androidSettings);
 
     await _notifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) async {
         final payload = response.payload;
-        if (payload != null && payload.contains(',')) {
+        if (payload != null && payload.contains('|')) {
           _handleNotificationTap(payload);
         }
       },
     );
   }
+
   Future<bool> startLiveTrackingCountdown({
     required LatLng toLatLng,
     Duration? duration,
@@ -47,14 +48,13 @@ class NotificationService {
       double estimatedSeconds = distanceMeters / speed;
       Duration eta = Duration(seconds: estimatedSeconds.round());
 
-      print("⏳ Bắt đầu ETA đếm ngược: ${eta.inSeconds}s");
-
-      await Future.delayed(eta); // Chờ đến khi tới nơi (mô phỏng)
+      print("⏳ Bắt đầu ETA đếm ngược: \${eta.inSeconds}s");
+      await Future.delayed(eta);
 
       print("✅ Đã đến nơi");
       return true;
     } catch (e) {
-      print("❌ Lỗi ETA: $e");
+      print("❌ Lỗi ETA: \$e");
       return false;
     }
   }
@@ -67,13 +67,13 @@ class NotificationService {
   }) async {
     await _notifications.zonedSchedule(
       id,
-      '📚 $title', // ví dụ: 📚 Toán học - Tiết 1
-      '⏰ $body',  // ví dụ: ⏰ Bắt đầu lúc 7:30 sáng, Phòng A101
+      '📚 $title',
+      '⏰ $body',
       tz.TZDateTime.from(scheduledTime, tz.local),
-      NotificationDetails( // bỏ const vì có biến
+      NotificationDetails(
         android: AndroidNotificationDetails(
-          'schedule_channel', // ID kênh
-          'Lịch học',          // Tên hiển thị trong setting
+          'schedule_channel',
+          'Lịch học',
           channelDescription: 'Thông báo nhắc lịch học cho học sinh',
           importance: Importance.max,
           priority: Priority.high,
@@ -84,7 +84,7 @@ class NotificationService {
           ticker: 'Lịch học sắp tới',
           icon: '@mipmap/ic_launcher',
           colorized: true,
-          color: Color(0xFF2196F3), // Màu xanh dương đặc trưng cho học tập
+          color: Color(0xFF2196F3),
           styleInformation: BigTextStyleInformation(
             '📌 $body\n',
             contentTitle: '📚 $title',
@@ -97,70 +97,91 @@ class NotificationService {
       UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.dateAndTime,
     );
-
   }
 
   Future<void> showLiveTrackingNotification({
     required String toLatLng,
     required Duration duration,
   }) async {
-    final scheduledTime = tz.TZDateTime.now(tz.local).add(const Duration(seconds: 1));
+    int remainingSeconds = duration.inSeconds;
 
-    await _notifications.zonedSchedule(
-      999,
-      '📍 Bắt đầu theo dõi học sinh',
-      '🚶 Theo dõi vị trí đến: $toLatLng\n➡️ Nhấn để mở bản đồ',
-      scheduledTime,
-      NotificationDetails( // ❌ bỏ 'const' ở đây
-        android: AndroidNotificationDetails(
-          'tracking_channel_id',
-          'Thông báo theo dõi trực tiếp',
-          channelDescription: 'Thông báo khi đến giờ theo dõi vị trí học sinh',
-          importance: Importance.max,
-          priority: Priority.high,
-          ticker: 'Tracking Started',
-          ongoing: true,
-          autoCancel: false,
-          visibility: NotificationVisibility.public,
-          playSound: true,
-          enableLights: true,
-          colorized: true,
-          color: Color(0xFF4CAF50),
-          icon: '@mipmap/ic_launcher',
-          styleInformation: BigTextStyleInformation(
-            '🚶 Đã đến giờ theo dõi hành trình học sinh.\n'
-                '➡️ Nhấn vào đây để xem bản đồ với vị trí đến: $toLatLng',
-            contentTitle: '📍 Bắt đầu theo dõi',
-            summaryText: 'Tracking started • Live mode',
+    void updateNotification() {
+      final minutes = remainingSeconds ~/ 60;
+      final seconds = remainingSeconds % 60;
+      final countdownText = '⏳ Còn lại: ${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+
+      final payload = '$toLatLng|$remainingSeconds';
+
+      _notifications.show(
+        999,
+        '📍 Đang theo dõi học sinh',
+        '$countdownText\n🚶 Vị trí đến: $toLatLng\n➡️ Nhấn để mở bản đồ',
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'tracking_channel_id',
+            'Thông báo theo dõi trực tiếp',
+            channelDescription: 'Theo dõi hành trình học sinh đang diễn ra',
+            importance: Importance.max,
+            priority: Priority.high,
+            ongoing: true,
+            autoCancel: false,
+            playSound: false,
+            visibility: NotificationVisibility.public,
+            colorized: true,
+            color: const Color(0xFF4CAF50),
+            icon: '@mipmap/ic_launcher',
+            styleInformation: BigTextStyleInformation(
+              '$countdownText\n🚶 Vị trí đến: $toLatLng\n➡️ Nhấn vào đây để xem bản đồ',
+              contentTitle: '📍 Đang theo dõi',
+              summaryText: 'Live tracking • $countdownText',
+            ),
           ),
         ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: toLatLng,
-      uiLocalNotificationDateInterpretation:
-      UILocalNotificationDateInterpretation.absoluteTime,
-    );
+        payload: payload,
+      );
+    }
 
+    updateNotification();
 
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      remainingSeconds--;
+      if (remainingSeconds <= 0) {
+        timer.cancel();
+        _notifications.cancel(999);
+      } else {
+        updateNotification();
+      }
+    });
   }
 
+  void cancelLiveTrackingNotification() {
+    _countdownTimer?.cancel();
+    _notifications.cancel(999);
+  }
 }
 
-/// ✅ Hàm xử lý khi nhấn vào thông báo (toLatLng dạng "10.93,106.85")
 void _handleNotificationTap(String payload) {
-  print("🟢 Đã nhận tap vào thông báo với payload: $payload");
-  final parts = payload.split(',');
+  print("🟢 Đã nhận tap vào thông báo với payload: \$payload");
+  final parts = payload.split('|');
   if (parts.length == 2) {
-    final lat = double.tryParse(parts[0]);
-    final lng = double.tryParse(parts[1]);
-    if (lat != null && lng != null) {
-      navigatorKey.currentState?.push(
-        MaterialPageRoute(
-          builder: (_) => LiveTrackingMapScreen(
-            destination: LatLng(lat, lng),
+    final location = parts[0].split(',');
+    final secondsLeft = int.tryParse(parts[1]);
+
+    if (location.length == 2) {
+      final lat = double.tryParse(location[0]);
+      final lng = double.tryParse(location[1]);
+
+      if (lat != null && lng != null) {
+        print("⏳ Còn lại \$secondsLeft giây để đến nơi");
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) => LiveTrackingMapScreen(
+              destination: LatLng(lat, lng),
+              eta: Duration(seconds: secondsLeft ?? 0),
+            ),
           ),
-        ),
-      );
+        );
+      }
     }
   }
 }
