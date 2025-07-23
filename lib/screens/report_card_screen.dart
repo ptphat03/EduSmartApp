@@ -1026,116 +1026,133 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Table(
-                  columnWidths: const {
-                    0: FlexColumnWidth(2), // Môn học
-                  },
-                  border: TableBorder.symmetric(
-                    inside: BorderSide(color: Colors.grey.shade300),
-                    outside: const BorderSide(color: Colors.grey),
-                  ),
-                  defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-                  children: [
-                    // Tiêu đề cột
-                    TableRow(
-                      decoration: BoxDecoration(color: Colors.grey[200]),
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: Text(
-                            'Môn học',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        ...columns.map((c) => Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Text(
-                            c,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        )),
-                        const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: Text(
-                            'Tổng điểm',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
+                SingleChildScrollView( // ✅ Cho phép scroll ngang khi tràn
+                  scrollDirection: Axis.horizontal,
+                  child: Table(
+                    columnWidths: {
+                      0: const FixedColumnWidth(120), // ✅ Cột "Môn học" không bị ép dòng
+                      for (int i = 1; i <= columns.length; i++) i: const FixedColumnWidth(70),
+                      columns.length + 1: const FixedColumnWidth(80), // ✅ Cột "Tổng điểm"
+                    },
+                    border: TableBorder.symmetric(
+                      inside: BorderSide(color: Colors.grey.shade300),
+                      outside: const BorderSide(color: Colors.grey),
                     ),
-                    // Dữ liệu từng môn học
-                    ...subjectsInGroup.map((subject) {
-                      final subjectName = subject['name'];
-                      final currentGrades = isEditingGrades
-                          ? (tempGrades[student.id]?[subjectName] ?? {})
-                          : (grades[subjectName] ?? {});
-
-                      double total = 0;
-                      for (int i = 0; i < columns.length; i++) {
-                        final col = columns[i];
-                        final weight = weights[i].toDouble();
-                        final raw = currentGrades[col];
-                        if (raw is num) {
-                          total += raw.toDouble() * weight;
-                        }
-                      }
-
-                      return TableRow(
+                    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                    children: [
+                      // Header
+                      TableRow(
+                        decoration: BoxDecoration(color: Colors.grey[200]),
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                            child: Text(subjectName),
+                          const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Text(
+                              'Môn học',
+                              softWrap: false,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
-                          ...columns.map((col) {
-                            final score = (currentGrades[col] ?? 0).toString();
-                            final controller = TextEditingController(text: score);
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 6),
-                              child: TextField(
-                                controller: controller,
-                                textAlign: TextAlign.center,
-                                enabled: isEditingGrades,
-                                decoration: InputDecoration(
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                  border: const OutlineInputBorder(),
-                                ),
-                                keyboardType: TextInputType.number,
-                                onChanged: (val) {
-                                  if (!isEditingGrades) return;
-                                  final v = double.tryParse(val);
-                                  if (v != null) {
-                                    tempGrades[student.id] ??= {};
-                                    tempGrades[student.id]![subjectName] ??= {};
-                                    tempGrades[student.id]![subjectName]![col] = v;
-                                  }
-                                },
-                              ),
-                            );
-                          }).toList(),
-                          Padding(
+                          ...columns.map((c) => Padding(
                             padding: const EdgeInsets.all(8),
                             child: Text(
-                              total.toStringAsFixed(1),
+                              c,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.teal,
-                              ),
+                              softWrap: false,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          )),
+                          const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Text(
+                              'Tổng điểm',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
                         ],
-                      );
-                    }).toList(),
-                  ],
+                      ),
+
+                      // Data rows
+                      ...subjectsInGroup.map((subject) {
+                        final subjectName = subject['name'];
+                        final currentGrades = isEditingGrades
+                            ? (tempGrades[student.id]?[subjectName] ?? {})
+                            : (grades[subjectName] ?? {});
+
+                        double total = 0;
+                        for (int i = 0; i < columns.length; i++) {
+                          final col = columns[i];
+                          final weight = weights[i].toDouble();
+                          final raw = currentGrades[col];
+                          if (raw is num) {
+                            total += raw.toDouble() * weight;
+                          }
+                        }
+
+                        return TableRow(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                              child: Text(
+                                subjectName,
+                                softWrap: false,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            ...columns.map((col) {
+                              final score = (currentGrades[col] ?? 0).toString();
+                              final controller = TextEditingController(text: score);
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 6),
+                                child: TextField(
+                                  controller: controller,
+                                  textAlign: TextAlign.center,
+                                  enabled: isEditingGrades,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                    border: const OutlineInputBorder(),
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (val) {
+                                    if (!isEditingGrades) return;
+                                    final v = double.tryParse(val);
+                                    if (v != null) {
+                                      tempGrades[student.id] ??= {};
+                                      tempGrades[student.id]![subjectName] ??= {};
+                                      tempGrades[student.id]![subjectName]![col] = v;
+                                    }
+                                  },
+                                ),
+                              );
+                            }).toList(),
+                            Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Text(
+                                total.toStringAsFixed(1),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.teal,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
         ),
       );
+
+
     }
 
     return widgets;

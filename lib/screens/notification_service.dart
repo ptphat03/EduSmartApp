@@ -13,11 +13,11 @@ FlutterLocalNotificationsPlugin();
 
 class NotificationService {
   static final _notifications = FlutterLocalNotificationsPlugin();
-  Timer? _countdownTimer;
 
   Future<void> init() async {
     tz.initializeTimeZones();
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidSettings);
 
     await _notifications.initialize(
@@ -31,32 +31,8 @@ class NotificationService {
     );
   }
 
-  Future<bool> startLiveTrackingCountdown({
-    required LatLng toLatLng,
-    Duration? duration,
-  }) async {
-    try {
-      Position currentPosition = await Geolocator.getCurrentPosition();
-      double distanceMeters = Geolocator.distanceBetween(
-        currentPosition.latitude,
-        currentPosition.longitude,
-        toLatLng.latitude,
-        toLatLng.longitude,
-      );
-
-      double speed = currentPosition.speed > 1 ? currentPosition.speed : 5; // m/s mặc định
-      double estimatedSeconds = distanceMeters / speed;
-      Duration eta = Duration(seconds: estimatedSeconds.round());
-
-      print("⏳ Bắt đầu ETA đếm ngược: \${eta.inSeconds}s");
-      await Future.delayed(eta);
-
-      print("✅ Đã đến nơi");
-      return true;
-    } catch (e) {
-      print("❌ Lỗi ETA: \$e");
-      return false;
-    }
+  Future<void> cancel(int id) async {
+    await _notifications.cancel(id);
   }
 
   Future<void> scheduleNotification({
@@ -93,24 +69,42 @@ class NotificationService {
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-      UILocalNotificationDateInterpretation.absoluteTime,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation
+          .absoluteTime,
       matchDateTimeComponents: DateTimeComponents.dateAndTime,
     );
   }
 
-  Future<void> showLiveTrackingNotification({
+  Future<void> scheduleLiveTrackingNotification({
+    required int id,
     required String toLatLng,
     required Duration duration,
+    required String type,
+    required DateTime scheduledTime,
   }) async {
-    final now = DateTime.now();
-    final payload = '$toLatLng|${now.toIso8601String()}|${duration.inSeconds}';
+    final payload =
+        '$toLatLng|${scheduledTime.toIso8601String()}|${duration
+        .inSeconds}|$type';
 
-    // 1. Hiển thị thông báo ngay
-    await _notifications.show(
-      999,
-      '📍 Đang theo dõi học sinh',
-      '🚶 Vị trí đến: $toLatLng\n➡️ Nhấn để mở bản đồ',
+    final isStart = type == 'start';
+    final title = isStart
+        ? '📍 Đang theo dõi đến lớp'
+        : '📍 Đang theo dõi về nhà';
+    final summary =
+    isStart
+        ? '🧭 Theo dõi hành trình đến trường'
+        : '🧭 Theo dõi hành trình về nhà';
+    final detail = isStart
+        ? '➡️ Nhấn để xem quãng đường đến lớp'
+        : '➡️ Nhấn để xem quãng đường về nhà';
+
+    final scheduledTZ = tz.TZDateTime.from(scheduledTime, tz.local);
+
+    await _notifications.zonedSchedule(
+      id,
+      title,
+      detail,
+      scheduledTZ,
       NotificationDetails(
         android: AndroidNotificationDetails(
           'tracking_channel_id',
@@ -126,29 +120,36 @@ class NotificationService {
           color: const Color(0xFF4CAF50),
           icon: '@mipmap/ic_launcher',
           styleInformation: BigTextStyleInformation(
-            '🚶 Vị trí đến: $toLatLng\n➡️ Nhấn vào đây để xem bản đồ',
-            contentTitle: '📍 Đang theo dõi',
-            summaryText: 'Live tracking đang diễn ra',
+            detail,
+            contentTitle: title,
+            summaryText: summary,
           ),
         ),
       ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+      UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.dateAndTime,
       payload: payload,
     );
 
-    // 2. Tự động hủy sau thời gian đếm ngược
-    Future.delayed(duration, () async {
-      await _notifications.cancel(999); // Hủy thông báo chính
+    // 🔔 Tự động hủy thông báo sau duration kể từ scheduledTime
+    final cancelDelay = scheduledTZ.difference(DateTime.now()) + duration;
+    Timer(cancelDelay, () {
+      _notifications.cancel(id);
+      print("🛑 Đã tự hủy thông báo tracking ID: $id sau duration");
     });
   }
 }
 
-void _handleNotificationTap(String payload) {
+  void _handleNotificationTap(String payload) {
   print("🟢 Đã nhận tap vào thông báo với payload: $payload");
   final parts = payload.split('|');
-  if (parts.length == 3) {
+  if (parts.length >= 4) {
     final location = parts[0].split(',');
     final startTime = DateTime.tryParse(parts[1]);
     final totalSeconds = int.tryParse(parts[2]);
+    final type = parts[3];
 
     if (location.length == 2 && startTime != null && totalSeconds != null) {
       final lat = double.tryParse(location[0]);
@@ -165,6 +166,7 @@ void _handleNotificationTap(String payload) {
             builder: (_) => LiveTrackingMapScreen(
               destination: LatLng(lat, lng),
               eta: Duration(seconds: secondsLeft),
+              type: type,
             ),
           ),
         );
@@ -174,4 +176,3 @@ void _handleNotificationTap(String payload) {
     }
   }
 }
-

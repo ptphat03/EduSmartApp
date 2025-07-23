@@ -45,6 +45,7 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
           final expiredDate = expiredAt.toDate();
 
           if (now.isAfter(activatedDate) && now.isBefore(expiredDate)) {
+            if (!mounted) return; // ✅ Kiểm tra trước khi setState
             setState(() {
               canAccess = true;
             });
@@ -57,10 +58,12 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
       debugPrint("Error checking premium: $e");
     }
 
+    if (!mounted) return; // ✅ Kiểm tra trước khi setState
     setState(() {
       canAccess = false;
     });
   }
+
 
   Future<void> fetchStudents() async {
     try {
@@ -347,25 +350,36 @@ class StudentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      color: Colors.white, // ✅ Nền trắng
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       margin: const EdgeInsets.symmetric(vertical: 6),
-      child: ListTile(
-        leading: const CircleAvatar(radius: 20),
-        subtitle: Column(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (student.fromAddress.isNotEmpty)
-              Text("🚩 Đi: ${student.fromAddress}"),
+              Text("🚩 Đi: ${student.fromAddress}", style: const TextStyle(fontSize: 14)),
             if (student.toAddress.isNotEmpty)
-              Text("🏁 Đến: ${student.toAddress}"),
-            const SizedBox(height: 8),
+              Text("🏁 Đến: ${student.toAddress}", style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 12),
+
+            // ✅ Căn giữa 2 nút
             Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    backgroundColor: Colors.blue.shade600,
+                    foregroundColor: Colors.white,
+                  ),
                   onPressed: () async {
-                    final result =
-                    await Navigator.push<Map<String, String>>(
+                    final result = await Navigator.push<Map<String, String>>(
                       context,
                       MaterialPageRoute(
                         builder: (_) => CustomAddressPickerScreen(
@@ -375,32 +389,66 @@ class StudentCard extends StatelessWidget {
                         ),
                       ),
                     );
+
                     if (result != null) {
-                      // xử lý nếu cần
+                      print('✅ Đã chọn địa chỉ mới:');
+                      print('📍 From Address: ${result['from']}');
+                      print('📍 To Address: ${result['to']}');
+                      print('📌 From LatLng: ${result['fromLatLng']}');
+                      print('📌 To LatLng: ${result['toLatLng']}');
+
+                      try {
+                        final uid = FirebaseAuth.instance.currentUser!.uid;
+                        final docRef = FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(uid)
+                            .collection('students')
+                            .doc(student.id);
+
+                        final docSnapshot = await docRef.get();
+                        final data = docSnapshot.data();
+                        if (data == null) return;
+
+                        final timetable = Map<String, dynamic>.from(data['timetable'] ?? {});
+                        final dateKey = student.date;
+                        final lessons = List<Map<String, dynamic>>.from(timetable[dateKey] ?? []);
+
+                        final index = lessons.indexWhere((lesson) =>
+                        lesson['start'] == student.startTime &&
+                            lesson['end'] == student.endTime);
+
+                        if (index != -1) {
+                          lessons[index]['fromAddress'] = result['from'];
+                          lessons[index]['toAddress'] = result['to'];
+                          lessons[index]['fromLatLng'] = result['fromLatLng'];
+                          lessons[index]['toLatLng'] = result['toLatLng'];
+
+                          await docRef.update({
+                            'timetable.$dateKey': lessons,
+                          });
+
+                          print('✅ Cập nhật Firestore thành công!');
+                        } else {
+                          print('❌ Không tìm thấy buổi học để cập nhật!');
+                        }
+                      } catch (e) {
+                        print('❌ Lỗi khi cập nhật địa chỉ: $e');
+                      }
                     }
                   },
                   icon: const Icon(Icons.edit_location),
-                  label: const Text("Địa chỉ"),
+                  label: const Text("Xem địa chỉ"),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text('Đi đến lịch ngày ${student.date}')),
-                    );
-                  },
-                  icon: const Icon(Icons.schedule),
-                  label: const Text("Lịch"),
-                ),
               ],
             ),
           ],
         ),
-        trailing: const Icon(Icons.check_circle, color: Colors.blue),
       ),
     );
   }
+
+
 }
 
 class Student {

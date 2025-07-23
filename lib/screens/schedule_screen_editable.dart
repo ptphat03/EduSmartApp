@@ -8,6 +8,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'notification_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
+
 
 class EditableScheduleScreen extends StatefulWidget {
   const EditableScheduleScreen({super.key});
@@ -87,103 +89,118 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
     }
   }
 
-  void scheduleLessons(List<Map<String, dynamic>> lessons, String dateStr) {
-    for (int i = 0; i < lessons.length; i++) {
-      final lesson = lessons[i];
+  final Map<int, Timer> _trackingTimers = {};
+
+  Future<void> scheduleLessons(List<Map<String, dynamic>> lessons, String dateStr) async {
+    for (final lesson in lessons) {
       final start = lesson['start'];
       final end = lesson['end'];
       final subject = lesson['subject'] ?? 'Buổi học';
       final notes = lesson['notes'] ?? '';
+      final lessonId = lesson['id'] ?? '$dateStr-${start.toString()}';
 
+      // === 🔔 BẮT ĐẦU ===
       try {
-        final formattedStart = start.toString().padLeft(5, '0');
-        final scheduledStart = DateFormat('yyyy-MM-dd HH:mm').parse('$dateStr $formattedStart');
-        final now = DateTime.now();
-        print('⏰ Thời gian hiện tại: $now');
-        print('📅 Thời gian buổi học bắt đầu: $scheduledStart');
+        final scheduledStart = DateFormat('yyyy-MM-dd HH:mm')
+            .parse('$dateStr ${start.toString().padLeft(5, '0')}');
+        final startId = lessonId.hashCode;
+        await NotificationService().cancel(startId);
 
-        if (scheduledStart.isAfter(now)) {
-          NotificationService().scheduleNotification(
-            id: scheduledStart.millisecondsSinceEpoch.remainder(100000),
-            title: "Nhắc học: $subject",
-            body: notes.isNotEmpty ? notes : "Đến giờ học lúc $start",
-            scheduledTime: scheduledStart,
-          );
-          if ((lesson['toLatLng'] ?? '').toString().isNotEmpty) {
-            final delay = scheduledStart.difference(DateTime.now());
-            if (delay.inSeconds > 0) {
-              print('⏳ Hẹn giờ gửi thông báo live tracking sau ${delay.inSeconds} giây');
+        final toLatLngStr = (lesson['toLatLng'] ?? '').toString();
+        final parts = toLatLngStr.split(',');
 
-              Future.delayed(delay, () async {
-                try {
-                  final current = await Geolocator.getCurrentPosition();
-                  final destinationStr = lesson['toLatLng'].toString().split(',');
+        if (parts.length == 2) {
+          final toLat = double.tryParse(parts[0]);
+          final toLng = double.tryParse(parts[1]);
 
-                  if (destinationStr.length != 2) {
-                    print('❌ Sai định dạng toLatLng');
-                    return;
-                  }
+          if (toLat != null && toLng != null) {
+            final current = await Geolocator.getCurrentPosition();
+            final duration = await getTravelDuration(
+              fromLat: current.latitude,
+              fromLng: current.longitude,
+              toLat: toLat,
+              toLng: toLng,
+              googleApiKey: 'AIzaSyDYVFN1cOdEHVPvEnkro8Jk79vK2zhisII',
+            );
 
-                  final toLat = double.tryParse(destinationStr[0]);
-                  final toLng = double.tryParse(destinationStr[1]);
+            if (duration != null) {
+              final notifyTime = scheduledStart.subtract(duration);
 
-                  if (toLat == null || toLng == null) {
-                    print('❌ Không thể parse toLatLng');
-                    return;
-                  }
+              if (notifyTime.isAfter(DateTime.now())) {
+                await NotificationService().scheduleNotification(
+                  id: startId,
+                  title: "Môn học: $subject",
+                  body: notes.isNotEmpty
+                      ? notes
+                      : "Chuẩn bị - Lớp học bắt đầu từ ${start.toString()}",
+                  scheduledTime: notifyTime,
+                );
 
-                  print('🌍 Đang gọi Google Directions API...');
-                  final duration = await getTravelDuration(
-                    fromLat: current.latitude,
-                    fromLng: current.longitude,
-                    toLat: toLat,
-                    toLng: toLng,
-                    googleApiKey: 'AIzaSyDYVFN1cOdEHVPvEnkro8Jk79vK2zhisII', // 👈 nhớ thay bằng key thật
-                  );
-
-                  if (duration != null) {
-                    print('📍 Gửi thông báo live tracking tới $toLat, $toLng — Ước lượng: ${duration.inMinutes} phút');
-                    await NotificationService().showLiveTrackingNotification(
-                      toLatLng: '$toLat,$toLng',
-                      duration: duration,
-                    );
-                  } else {
-                    print('⚠️ Không thể lấy thời gian từ Google API');
-                  }
-                } catch (e) {
-                  print('❌ Lỗi khi xử lý live tracking: $e');
-                }
-              });
+                // 🔔 Tracking Notification luôn bằng zonedSchedule
+                await NotificationService().scheduleLiveTrackingNotification(
+                  id: startId + 1000,
+                  toLatLng: '$toLat,$toLng',
+                  duration: duration,
+                  type: 'start',
+                  scheduledTime: notifyTime.add(const Duration(seconds: 5)),
+                );
+              }
             }
           }
-
-
         }
       } catch (e) {
-        print("Lỗi khi đặt lịch thông báo bắt đầu cho $dateStr $start: $e");
+        print("❌ Lỗi xử lý bắt đầu: $e");
       }
 
+      // === 🔔 KẾT THÚC ===
       try {
-        final formattedEnd = end.toString().padLeft(5, '0');
-        final scheduledEnd = DateFormat('yyyy-MM-dd HH:mm').parse('$dateStr $formattedEnd');
-        final now = DateTime.now();
-        print('⏰ Thời gian hiện tại: $now');
-        print('📅 Thời gian buổi học kết thúc: $scheduledEnd');
+        final scheduledEnd = DateFormat('yyyy-MM-dd HH:mm')
+            .parse('$dateStr ${end.toString().padLeft(5, '0')}');
+        final endId = lessonId.hashCode + 1;
+        await NotificationService().cancel(endId);
 
-        if (scheduledEnd.isAfter(now)) {
-          NotificationService().scheduleNotification(
-            id: scheduledEnd.millisecondsSinceEpoch.remainder(100000) + 1, // tránh trùng id
-            title: "Kết thúc: $subject",
-            body: "Buổi học kết thúc lúc $end",
-            scheduledTime: scheduledEnd,
-          );
+        final fromLatLngStr = (lesson['fromLatLng'] ?? '').toString();
+        final parts = fromLatLngStr.split(',');
 
+        if (parts.length == 2) {
+          final toLat = double.tryParse(parts[0].trim());
+          final toLng = double.tryParse(parts[1].trim());
+
+          if (toLat != null && toLng != null) {
+            final current = await Geolocator.getCurrentPosition();
+            final duration = await getTravelDuration(
+              fromLat: current.latitude,
+              fromLng: current.longitude,
+              toLat: toLat,
+              toLng: toLng,
+              googleApiKey: 'AIzaSyDYVFN1cOdEHVPvEnkro8Jk79vK2zhisII',
+            );
+
+            if (duration != null && scheduledEnd.isAfter(DateTime.now())) {
+              await NotificationService().scheduleNotification(
+                id: endId,
+                title: "🚌 Hết giờ: $subject",
+                body: "Buổi học kết thúc lúc ${end.toString()}. Chuẩn bị về nhà!",
+                scheduledTime: scheduledEnd,
+              );
+
+              await NotificationService().scheduleLiveTrackingNotification(
+                id: endId + 1000,
+                toLatLng: '$toLat,$toLng',
+                duration: duration,
+                type: 'end',
+                scheduledTime: scheduledEnd.add(const Duration(seconds: 5)),
+              );
+            }
+          }
         }
       } catch (e) {
-        print("Lỗi khi đặt lịch thông báo kết thúc cho $dateStr $end: $e");
+        print("❌ Lỗi xử lý kết thúc '$subject': $e");
       }
     }
   }
+
+
 
 
   List<DateTime> getCurrentWeekDates() {
@@ -909,29 +926,4 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
   }
 }
 
-void checkAndNotifySchedule(DateTime start, String toLatLng) async {
-  final now = DateTime.now();
-  if (now.year == start.year &&
-      now.month == start.month &&
-      now.day == start.day &&
-      now.hour == start.hour &&
-      now.minute == start.minute) {
-    final position = await Geolocator.getCurrentPosition();
-    final destination = toLatLng.split(',');
-    final toLat = double.tryParse(destination[0]) ?? 0.0;
-    final toLng = double.tryParse(destination[1]) ?? 0.0;
-    final distanceMeters = Geolocator.distanceBetween(
-      position.latitude,
-      position.longitude,
-      toLat,
-      toLng,
-    );
-    final estimatedDuration = Duration(seconds: 5);
-    // Duration(minutes: (distanceMeters / 50).round()); // giả định đi bộ 50m/phút
-    await NotificationService().showLiveTrackingNotification(
-      toLatLng: toLatLng,
-      duration: estimatedDuration,
-    );
 
-  }
-}

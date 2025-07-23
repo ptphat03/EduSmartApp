@@ -5,15 +5,18 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'dart:async';
+import 'notification_service.dart'; // Add your NotificationService import
 
 class LiveTrackingMapScreen extends StatefulWidget {
   final LatLng destination;
   final Duration? eta;
+  final String type; // "start" or "end"
 
   const LiveTrackingMapScreen({
     super.key,
     required this.destination,
     this.eta,
+    required this.type,
   });
 
   @override
@@ -92,6 +95,16 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
           timer.cancel();
           if (!hasArrived) {
             print('❌ Quá ETA nhưng chưa tới nơi');
+            NotificationService().scheduleNotification(
+              id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+              title: widget.type == 'start'
+                  ? '⚠️ Không đến lớp đúng giờ'
+                  : '⚠️ Chưa về nhà đúng giờ',
+              body: widget.type == 'start'
+                  ? 'Học sinh chưa đến lớp đúng giờ quy định.'
+                  : 'Học sinh chưa về nhà đúng giờ quy định.',
+              scheduledTime: DateTime.now().add(const Duration(seconds: 1)),
+            );
             _stopTracking();
             Navigator.pop(context, false);
           }
@@ -127,6 +140,16 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
       if (distanceToDestination <= 20 && !hasArrived) {
         hasArrived = true;
         print('✅ Đã đến đích');
+        NotificationService().scheduleNotification(
+          id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+          title: widget.type == 'start'
+              ? '✅ Đã đến lớp'
+              : '✅ Đã về đến nhà',
+          body: widget.type == 'start'
+              ? 'Học sinh đã đến lớp đúng giờ.'
+              : 'Học sinh đã về nhà đúng giờ.',
+          scheduledTime: DateTime.now().add(const Duration(seconds: 1)),
+        );
         _stopTracking();
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
