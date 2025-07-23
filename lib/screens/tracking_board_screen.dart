@@ -63,13 +63,14 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
   }
 
   Future<void> fetchStudents() async {
-    final snapshot = await FirebaseFirestore.instance.collection('users').get();
-    final students = <Student>[];
-    final idNameMap = <String, String>{};
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+      final studentSnap = await userRef.collection('students').get();
 
-    for (var userDoc in snapshot.docs) {
-      final studentSnap =
-      await userDoc.reference.collection('students').get();
+      final students = <Student>[];
+      final idNameMap = <String, String>{};
+
       for (var studentDoc in studentSnap.docs) {
         final data = studentDoc.data();
         final studentId = studentDoc.id;
@@ -98,17 +99,20 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
           }
         }
       }
-    }
 
-    if (!mounted) return;
-    setState(() {
-      allStudents = students;
-      studentIdNameMap = idNameMap;
-      if (idNameMap.isNotEmpty) {
-        selectedStudentId = idNameMap.keys.first;
-      }
-    });
+      if (!mounted) return;
+      setState(() {
+        allStudents = students;
+        studentIdNameMap = idNameMap;
+        if (selectedStudentId == null && idNameMap.isNotEmpty) {
+          selectedStudentId = idNameMap.keys.first;
+        }
+      });
+    } catch (e) {
+      debugPrint("Lỗi khi fetch students: $e");
+    }
   }
+
 
   String get formattedCurrentDate =>
       DateFormat('dd/MM/yyyy').format(currentDate);
@@ -196,95 +200,130 @@ class _TrackingBoardScreenState extends State<TrackingBoardScreen> {
         .toList();
 
     return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: checkPremiumStatus,
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.blueAccent, Colors.white],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
+      backgroundColor: Colors.grey.shade200,
+      body: SafeArea( // ✅ Bọc toàn bộ để tránh bị AppBar che
+        child: RefreshIndicator(
+          onRefresh: checkPremiumStatus,
+          child: Column(
             children: [
-              DropdownButton<String>(
-                value: selectedStudentId,
-                isExpanded: true,
-                hint: const Text("Chọn học sinh"),
-                items: studentIdNameMap.entries.map((entry) {
-                  return DropdownMenuItem<String>(
-                    value: entry.key,
-                    child: Text(entry.value),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    selectedStudentId = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_left),
-                    onPressed: () {
-                      setState(() {
-                        currentDate =
-                            currentDate.subtract(const Duration(days: 1));
-                      });
-                    },
-                  ),
-                  Text(
-                    formattedCurrentDate,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_right),
-                    onPressed: () {
-                      setState(() {
-                        currentDate =
-                            currentDate.add(const Duration(days: 1));
-                      });
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (filteredStudents.isEmpty)
-                const Center(child: Text("Không có lịch học cho ngày này"))
-              else
-                ...(() {
-                  final sortedStudents = [...filteredStudents];
-                  sortedStudents
-                      .sort((a, b) => a.startTime.compareTo(b.startTime));
-                  return sortedStudents.map((s) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              SizedBox(height: MediaQuery.of(context).size.height * 0.01),
+              Container(
+                color: Colors.white,
+                width: double.infinity,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: selectedStudentId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Chọn học sinh',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      items: studentIdNameMap.entries.map((entry) {
+                        return DropdownMenuItem<String>(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedStudentId = value;
+                        });
+                      },
+                    ),
+
+                    const SizedBox(height: 10), // ✅ Thêm khoảng cách dọc giữa dropdown và row
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.only(left: 4, bottom: 4),
-                          child: Text(
-                            "⏰ ${s.startTime} - ${s.endTime}",
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 15),
+                        IconButton(
+                          icon: const Icon(Icons.arrow_left),
+                          color: Colors.blue.shade700, // ✅ Màu xanh dương đậm
+                          iconSize: 40, // ✅ Tăng kích thước icon
+                          onPressed: () {
+                            setState(() {
+                              currentDate = currentDate.subtract(const Duration(days: 1));
+                            });
+                          },
+                        ),
+                        Text(
+                          formattedCurrentDate,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        StudentCard(student: s),
+                        IconButton(
+                          icon: const Icon(Icons.arrow_right),
+                          color: Colors.blue.shade700, // ✅ Màu xanh dương đậm
+                          iconSize: 40, // ✅ Tăng kích thước icon
+                          onPressed: () {
+                            setState(() {
+                              currentDate = currentDate.add(const Duration(days: 1));
+                            });
+                          },
+                        ),
                       ],
-                    );
-                  }).toList();
-                })(),
+                    ),
+
+
+                  ],
+                ),
+              ),
+
+
+              // 📄 Danh sách cuộn
+              Expanded(
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    const SizedBox(height: 8),
+                    if (filteredStudents.isEmpty)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 40),
+                          child: Text(
+                            "Không có lịch học cho ngày này",
+                            style: TextStyle(fontSize: 18, color: Colors.black54),
+                          ),
+                        ),
+                      )
+                    else
+                      ...(() {
+                        final sortedStudents = [...filteredStudents];
+                        sortedStudents.sort((a, b) => a.startTime.compareTo(b.startTime));
+                        return sortedStudents.map((s) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4, bottom: 4, top: 8),
+                                child: Text(
+                                  "⏰ ${s.startTime} - ${s.endTime}",
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
+                              ),
+                              StudentCard(student: s),
+                            ],
+                          );
+                        }).toList();
+                      })(),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
+
+
+
+
   }
 }
 
@@ -358,7 +397,7 @@ class StudentCard extends StatelessWidget {
             ),
           ],
         ),
-        trailing: const Icon(Icons.check_circle, color: Colors.green),
+        trailing: const Icon(Icons.check_circle, color: Colors.blue),
       ),
     );
   }

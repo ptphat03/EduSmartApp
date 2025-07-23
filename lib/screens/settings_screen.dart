@@ -88,7 +88,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 30),
             const CircleAvatar(
               radius: 50,
-              backgroundImage: NetworkImage('https://randomuser.me/api/portraits/men/32.jpg'), // ảnh mặc định
+              backgroundImage: NetworkImage('https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png')
+              , // ảnh mặc định
             ),
             const SizedBox(height: 12),
             Text(

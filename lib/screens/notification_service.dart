@@ -140,8 +140,6 @@ class NotificationService {
       await _notifications.cancel(999); // Hủy thông báo chính
     });
   }
-
-
 }
 
 void _handleNotificationTap(String payload) {
