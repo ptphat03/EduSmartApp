@@ -493,7 +493,6 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 6),
-
                                   Row(
                                     children: [
                                       const Icon(Icons.person_outline, size: 20, color: Colors.grey),
@@ -557,7 +556,7 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                           const Icon(Icons.location_on_outlined, size: 20, color: Colors.grey),
                                           const SizedBox(width: 6),
                                           Expanded(
-                                            child: Text('Điểm đi: ${lesson['fromAddress']}', style: const TextStyle(fontSize: 15)),
+                                            child: Text('Địa chỉ đi: ${lesson['fromAddress']}', style: const TextStyle(fontSize: 15)),
                                           ),
                                         ],
                                       ),
@@ -571,7 +570,7 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                           const Icon(Icons.location_on, size: 20, color: Colors.grey),
                                           const SizedBox(width: 6),
                                           Expanded(
-                                            child: Text('Điểm đến: ${lesson['toAddress']}', style: const TextStyle(fontSize: 15)),
+                                            child: Text('Địa chỉ về: ${lesson['toAddress']}', style: const TextStyle(fontSize: 15)),
                                           ),
                                         ],
                                       ),
@@ -830,8 +829,8 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                             icon: const Icon(Icons.location_on_outlined),
                             label: Text(
                               controllers['fromAddress']!.text.isNotEmpty
-                                  ? "Chọn địa chỉ"
-                                  : "Chọn địa chỉ",
+                                  ? "Đi: ${controllers['fromAddress']!.text}"
+                                  : "Chọn địa chỉ đi",
                               overflow: TextOverflow.ellipsis,
                             ),
                             onPressed: () async {
@@ -839,8 +838,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => CustomAddressPickerScreen(
-                                    title: "Chọn địa chỉ",
-                                    isEditMode: true,
+                                    title: "Chọn địa chỉ đi và về",
                                     initialFrom: _parseLatLng(controllers['fromLatLng']!.text),
                                     initialTo: _parseLatLng(controllers['toLatLng']!.text),
                                   ),
@@ -858,6 +856,37 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                           ),
                         ),
                         const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.location_on),
+                            label: Text(
+                              controllers['toAddress']!.text.isNotEmpty
+                                  ? "Về: ${controllers['toAddress']!.text}"
+                                  : "Chọn địa chỉ về",
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onPressed: () async {
+                              final result = await Navigator.push<Map<String, String>>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CustomAddressPickerScreen(
+                                    title: "Chọn địa chỉ đi và về",
+                                    initialFrom: _parseLatLng(controllers['fromLatLng']!.text),
+                                    initialTo: _parseLatLng(controllers['toLatLng']!.text),
+                                  ),
+                                ),
+                              );
+                              if (result != null) {
+                                setState(() {
+                                  controllers['fromAddress']!.text = result['from'] ?? '';
+                                  controllers['toAddress']!.text = result['to'] ?? '';
+                                  controllers['fromLatLng']!.text = result['fromLatLng'] ?? '';
+                                  controllers['toLatLng']!.text = result['toLatLng'] ?? '';
+                                });
+                              }
+                            },
+                          ),
+                        ),
                       ],
                     ),
                   ),

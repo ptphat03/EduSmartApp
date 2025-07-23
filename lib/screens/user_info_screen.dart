@@ -23,10 +23,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
   DateTime? selectedDob;
   String gender = 'Nam';
   bool isLoading = false;
-  final addressController = TextEditingController();
-  LatLng? selectedLocation; // Tọa độ từ Google Map
-  final searchController = TextEditingController();
-  List<dynamic> suggestions = [];
+
 
 
   Future<void> saveUserInfo() async {
@@ -65,10 +62,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
       'user_display_name': display_name,
       'user_gender': gender,
       'user_dob': Timestamp.fromDate(selectedDob!),
-      'user_address': addressController.text,
-      'user_location': selectedLocation != null
-          ? GeoPoint(selectedLocation!.latitude, selectedLocation!.longitude)
-          : null,
+
 
     };
     try {
@@ -212,31 +206,8 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
                         .toList(),
                     onChanged: (value) => setState(() => gender = value ?? 'Nam'),
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: addressController,
-                    decoration: InputDecoration(
-                      labelText: 'Địa chỉ',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.location_on),
-                      suffixIcon: IconButton(
-                        icon: Icon(Icons.map),
-                        onPressed: () async {
-                          // Chuyển sang màn chọn địa điểm
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const MapPickerScreen(initialLocation: null, editable: true)),
-                          );
-                          if (result != null && result is Map<String, dynamic>) {
-                            setState(() {
-                              addressController.text = result['placeName'];
-                              selectedLocation = result['latlng'];
-                            });
-                          }
-                        },
-                      ),
-                    ),
-                  ),
+
+
 
                   const SizedBox(height: 24),
                   SizedBox(

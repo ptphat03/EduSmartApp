@@ -18,12 +18,7 @@ class StudentInfoScreen extends StatefulWidget {
 class _StudentInfoScreenState extends State<StudentInfoScreen> {
   final studentNameController = TextEditingController();
   final dobController = TextEditingController();
-  final schoolController = TextEditingController();
   final phoneController = TextEditingController();
-  final addressController = TextEditingController();
-
-  LatLng? selectedLocation;           // địa chỉ
-  LatLng? selectedSchoolLocation;     // tọa độ trường học
 
   DateTime? selectedDob;
   String gender = 'Nam';
@@ -61,16 +56,10 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
 
   Future<void> saveStudentInfo() async {
     final name = studentNameController.text.trim();
-    final school = schoolController.text.trim();
-    final phone = phoneController.text.trim();
-    final address = addressController.text.trim();
 
-    if (name.isEmpty || address.isEmpty || school.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng điền đầy đủ thông tin.')),
-      );
-      return;
-    }
+    final phone = phoneController.text.trim();
+
+
 
     if (selectedDob == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -95,14 +84,7 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
       'student_dob': Timestamp.fromDate(selectedDob!),
       'student_phone': phone,
       'student_gender': gender,
-      'student_school': school,
-      'student_school_location': selectedSchoolLocation != null
-          ? GeoPoint(selectedSchoolLocation!.latitude, selectedSchoolLocation!.longitude)
-          : null,
-      'student_address': address,
-      'student_location': selectedLocation != null
-          ? GeoPoint(selectedLocation!.latitude, selectedLocation!.longitude)
-          : null,
+
       'created_at': FieldValue.serverTimestamp(),
     };
 
@@ -130,9 +112,9 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
   void dispose() {
     studentNameController.dispose();
     dobController.dispose();
-    schoolController.dispose();
+
     phoneController.dispose();
-    addressController.dispose();
+
     super.dispose();
   }
 
@@ -223,54 +205,8 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
                       FilteringTextInputFormatter.digitsOnly,
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: schoolController,
-                    decoration: InputDecoration(
-                      labelText: "Trường học",
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.school),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.map),
-                        onPressed: () async {
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const MapPickerScreen(initialLocation: null, editable: true)),
-                          );
-                          if (result != null && result is Map<String, dynamic>) {
-                            setState(() {
-                              schoolController.text = result['placeName'];
-                              selectedSchoolLocation = result['latlng'];
-                            });
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: addressController,
-                    decoration: InputDecoration(
-                      labelText: 'Địa chỉ',
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.location_on),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.map),
-                        onPressed: () async {
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const MapPickerScreen(initialLocation: null, editable: true)),
-                          );
-                          if (result != null && result is Map<String, dynamic>) {
-                            setState(() {
-                              addressController.text = result['placeName'];
-                              selectedLocation = result['latlng'];
-                            });
-                          }
-                        },
-                      ),
-                    ),
-                  ),
+
+
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,

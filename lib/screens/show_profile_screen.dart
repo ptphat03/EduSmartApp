@@ -131,7 +131,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.blue.shade700,
-        title: const Text("Hồ sơ cá nhân"),
+        iconTheme: const IconThemeData(
+          color: Colors.white, // ← màu trắng cho nút back
+        ),
+        title: const Text(
+          "Hồ sơ cá nhân",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -158,6 +167,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
+
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -214,24 +224,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           }
                         })(),
                       ),
-                      buildInfoRow(
-                        "Địa chỉ",
-                        userInfo?['user_address'],
-                        onTap: () => openMapScreen(
-                          currentLocation: userInfo?['user_location'],
-                          title: "Chọn vị trí người dùng",
-                          onPicked: (newLoc, newAddress) async {
-                            final uid = FirebaseAuth.instance.currentUser?.uid;
-                            if (uid != null) {
-                              await FirebaseFirestore.instance.collection('users').doc(uid).update({
-                                'user_location': newLoc,
-                                'user_address': newAddress,
-                              });
-                              loadUserData();
-                            }
-                          },
-                        ),
-                      ),
+
                     ],
                   ),
                 ),
@@ -264,55 +257,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           }
                         })(),
                       ),
-                      buildInfoRow("SĐT", student['student_phone']),
-                      buildInfoRow(
-                        "Địa chỉ",
-                        student['student_address'],
-                        onTap: () => openMapScreen(
-                          currentLocation: student['student_location'],
-                          title: "Chọn vị trí học sinh",
-                          onPicked: (newLoc, newAddress) async {
-                            final uid = FirebaseAuth.instance.currentUser?.uid;
-                            final studentId = student['id'];
-                            if (uid != null && studentId != null) {
-                              await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(uid)
-                                  .collection('students')
-                                  .doc(studentId)
-                                  .update({
-                                'student_location': newLoc,
-                                'student_address': newAddress,
-                              });
-                              loadUserData();
-                            }
-                          },
-                        ),
-                      ),
-                      buildInfoRow(
-                        "Trường",
-                        student['student_school'],
-                        onTap: () => openMapScreen(
-                          currentLocation: student['student_school_location'],
-                          title: "Chọn vị trí trường học",
-                          onPicked: (newLoc, newAddress) async {
-                            final uid = FirebaseAuth.instance.currentUser?.uid;
-                            final studentId = student['id'];
-                            if (uid != null && studentId != null) {
-                              await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(uid)
-                                  .collection('students')
-                                  .doc(studentId)
-                                  .update({
-                                'student_school_location': newLoc,
-                                'student_school': newAddress,
-                              });
-                              loadUserData();
-                            }
-                          },
-                        ),
-                      ),
+
+
                     ],
                   ),
                 ),

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class ReportCardScreen extends StatefulWidget {
   const ReportCardScreen({super.key});
@@ -949,19 +950,27 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        SvgPicture.asset(
+                          'assets/images/empty.svg',
+                          height: 180,
+                        ),
+                        const SizedBox(height: 24),
                         const Text(
                           "Chưa có bảng điểm nào",
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black54,
+                            color: Color(0xFF333333),
                           ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
-                          icon: const Icon(Icons.add),
-                          label: const Text("Thêm môn học mới"),
+                          icon: const Icon(Icons.add, color: Colors.white),
+                          label: const Text(
+                            "Thêm môn học mới",
+                            style: TextStyle(color: Colors.white),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -1017,12 +1026,26 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  groupData['groupName'],
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.folder_copy, size: 20, color: Colors.deepPurple),
+                      const SizedBox(width: 6),
+                      Text(
+                        groupData['groupName'],
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepPurple,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),
