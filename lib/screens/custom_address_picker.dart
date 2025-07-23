@@ -9,12 +9,14 @@ class CustomAddressPickerScreen extends StatefulWidget {
   final String? title;
   final LatLng? initialFrom;
   final LatLng? initialTo;
+  final bool isEditMode;
 
   const CustomAddressPickerScreen({
     super.key,
     this.title,
     this.initialFrom,
     this.initialTo,
+    this.isEditMode = false, // ✅ giá trị mặc định
   });
 
   @override
@@ -33,6 +35,8 @@ class _CustomAddressPickerScreenState extends State<CustomAddressPickerScreen> {
   String durationText = '';
   String distanceText = '';
   Offset draggablePosition = const Offset(20, 80);
+  late bool isEditMode;
+
 
   final TextEditingController searchController = TextEditingController();
   List<dynamic> suggestions = [];
@@ -42,6 +46,7 @@ class _CustomAddressPickerScreenState extends State<CustomAddressPickerScreen> {
     super.initState();
     fromLatLng = widget.initialFrom;
     toLatLng = widget.initialTo;
+    isEditMode = widget.isEditMode;
 
     if (fromLatLng != null) _getAddressFromLatLng(fromLatLng!, isFrom: true);
     if (toLatLng != null) _getAddressFromLatLng(toLatLng!, isFrom: false);
@@ -174,16 +179,31 @@ class _CustomAddressPickerScreenState extends State<CustomAddressPickerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title ?? "Chọn địa chỉ")),
+      appBar: AppBar(
+        title: Text(widget.title ?? "Bản đồ quãng đường"),
+        actions: [
+          IconButton(
+            icon: Icon(isEditMode ? Icons.visibility : Icons.edit),
+            tooltip: isEditMode ? "Chế độ xem" : "Chế độ chỉnh sửa",
+            onPressed: () {
+              setState(() {
+                isEditMode = !isEditMode;
+              });
+            },
+          ),
+        ],
+      ),
+
       body: Stack(
         children: [
           Column(
             children: [
+              if (isEditMode)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   ChoiceChip(
-                    label: const Text("Địa chỉ đi"),
+                    label: const Text("Điểm đi"),
                     selected: isSelectingFrom,
                     onSelected: (selected) {
                       if (!isSelectingFrom) setState(() => isSelectingFrom = true);
@@ -191,7 +211,7 @@ class _CustomAddressPickerScreenState extends State<CustomAddressPickerScreen> {
                   ),
                   const SizedBox(width: 8),
                   ChoiceChip(
-                    label: const Text("Địa chỉ về"),
+                    label: const Text("Điểm đến"),
                     selected: !isSelectingFrom,
                     onSelected: (selected) {
                       if (isSelectingFrom) setState(() => isSelectingFrom = false);
@@ -199,6 +219,7 @@ class _CustomAddressPickerScreenState extends State<CustomAddressPickerScreen> {
                   ),
                 ],
               ),
+              if (isEditMode)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Column(
@@ -273,20 +294,20 @@ class _CustomAddressPickerScreenState extends State<CustomAddressPickerScreen> {
                     zoom: 15,
                   ),
                   onMapCreated: (controller) => mapController = controller,
-                  onTap: _onMapTap,
+                  onTap: isEditMode ? _onMapTap : null,
                   markers: {
                     if (fromLatLng != null)
                       Marker(
                         markerId: const MarkerId("from"),
                         position: fromLatLng!,
-                        infoWindow: const InfoWindow(title: 'Địa chỉ đi'),
+                        infoWindow: const InfoWindow(title: 'Điểm xuất phát'),
                         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
                       ),
                     if (toLatLng != null)
                       Marker(
                         markerId: const MarkerId("to"),
                         position: toLatLng!,
-                        infoWindow: const InfoWindow(title: 'Địa chỉ về'),
+                        infoWindow: const InfoWindow(title: 'Điểm đến'),
                         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
                       ),
                   },
@@ -380,9 +401,9 @@ class _CustomAddressPickerScreenState extends State<CustomAddressPickerScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (fromAddress.isNotEmpty)
-                          Text("\uD83D\uDCCD Địa chỉ đi: $fromAddress", style: const TextStyle(fontSize: 14)),
+                          Text("\uD83D\uDCCD Điểm đi: $fromAddress", style: const TextStyle(fontSize: 14)),
                         if (toAddress.isNotEmpty)
-                          Text("\uD83C\uDFC1 Địa chỉ về: $toAddress", style: const TextStyle(fontSize: 14)),
+                          Text("\uD83C\uDFC1 Điểm đến: $toAddress", style: const TextStyle(fontSize: 14)),
                         if (durationText.isNotEmpty || distanceText.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),

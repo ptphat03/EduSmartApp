@@ -67,7 +67,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ? DateFormat('dd/MM/yyyy').format((data['student_dob'] as Timestamp).toDate())
                   : ''),
           'dob_raw': data['student_dob'] != null ? (data['student_dob'] as Timestamp).toDate() : null,
-          'school': TextEditingController(text: data['student_school']),
+          //'school': TextEditingController(text: data['student_school']),
         };
       }).toList();
 
@@ -99,7 +99,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           'student_phone': student['phone'].text.trim(),
           'student_gender': student['gender'].text.trim(),
           'student_dob': student['dob_raw'] != null ? Timestamp.fromDate(student['dob_raw']) : null,
-          'student_school': student['school'].text.trim(),
+          //'student_school': student['school'].text.trim(),
         }, SetOptions(merge: true));
       }
 
@@ -301,7 +301,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             student['dob_raw'] = picked;
                           }),
                         ),
-                        TextFormField(controller: student['school'], decoration: const InputDecoration(labelText: 'Trường học')),
+                        //TextFormField(controller: student['school'], decoration: const InputDecoration(labelText: 'Trường học')),
                       ],
                     ),
                   ),

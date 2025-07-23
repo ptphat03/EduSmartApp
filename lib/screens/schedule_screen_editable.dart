@@ -1,3 +1,4 @@
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,6 +6,8 @@ import 'package:intl/intl.dart';
 import 'custom_address_picker.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'notification_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class EditableScheduleScreen extends StatefulWidget {
   const EditableScheduleScreen({super.key});
@@ -42,11 +45,27 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
         final data = doc.data();
         final rawTimetable = data['timetable'] ?? {};
 
+        final now = DateTime.now();
         final parsedTimetable = <String, List<Map<String, dynamic>>>{};
-        rawTimetable.forEach((date, sessions) {
-          parsedTimetable[date] = List<Map<String, dynamic>>.from(sessions);
-        });
 
+        rawTimetable.forEach((date, sessions) {
+          parsedTimetable[date] = List<Map<String, dynamic>>.from(sessions.map((lesson) {
+            final startStr = lesson['start'] ?? '';
+            final endStr = lesson['end'] ?? '';
+            DateTime? startTime;
+            DateTime? endTime;
+
+            try {
+              startTime = DateFormat('yyyy-MM-dd HH:mm').parse('$date $startStr');
+              endTime = DateFormat('yyyy-MM-dd HH:mm').parse('$date $endStr');
+            } catch (_) {}
+
+            final isTracking = startTime != null && endTime != null && now.isAfter(startTime) && now.isBefore(endTime);
+            lesson['status'] = isTracking ? 'tracking' : 'free';
+
+            return lesson;
+          }));
+        });
         // ✅ THÊM GỌI LỊCH THÔNG BÁO
         for (final entry in parsedTimetable.entries) {
           scheduleLessons(entry.value, entry.key);
@@ -90,6 +109,55 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
             body: notes.isNotEmpty ? notes : "Đến giờ học lúc $start",
             scheduledTime: scheduledStart,
           );
+          if ((lesson['toLatLng'] ?? '').toString().isNotEmpty) {
+            final delay = scheduledStart.difference(DateTime.now());
+            if (delay.inSeconds > 0) {
+              print('⏳ Hẹn giờ gửi thông báo live tracking sau ${delay.inSeconds} giây');
+
+              Future.delayed(delay, () async {
+                try {
+                  final current = await Geolocator.getCurrentPosition();
+                  final destinationStr = lesson['toLatLng'].toString().split(',');
+
+                  if (destinationStr.length != 2) {
+                    print('❌ Sai định dạng toLatLng');
+                    return;
+                  }
+
+                  final toLat = double.tryParse(destinationStr[0]);
+                  final toLng = double.tryParse(destinationStr[1]);
+
+                  if (toLat == null || toLng == null) {
+                    print('❌ Không thể parse toLatLng');
+                    return;
+                  }
+
+                  print('🌍 Đang gọi Google Directions API...');
+                  final duration = await getTravelDuration(
+                    fromLat: current.latitude,
+                    fromLng: current.longitude,
+                    toLat: toLat,
+                    toLng: toLng,
+                    googleApiKey: 'AIzaSyDYVFN1cOdEHVPvEnkro8Jk79vK2zhisII', // 👈 nhớ thay bằng key thật
+                  );
+
+                  if (duration != null) {
+                    print('📍 Gửi thông báo live tracking tới $toLat, $toLng — Ước lượng: ${duration.inMinutes} phút');
+                    await NotificationService().showLiveTrackingNotification(
+                      toLatLng: '$toLat,$toLng',
+                      duration: duration,
+                    );
+                  } else {
+                    print('⚠️ Không thể lấy thời gian từ Google API');
+                  }
+                } catch (e) {
+                  print('❌ Lỗi khi xử lý live tracking: $e');
+                }
+              });
+            }
+          }
+
+
         }
       } catch (e) {
         print("Lỗi khi đặt lịch thông báo bắt đầu cho $dateStr $start: $e");
@@ -109,6 +177,7 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
             body: "Buổi học kết thúc lúc $end",
             scheduledTime: scheduledEnd,
           );
+
         }
       } catch (e) {
         print("Lỗi khi đặt lịch thông báo kết thúc cho $dateStr $end: $e");
@@ -144,6 +213,16 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
     );
 
     if (lesson != null) {
+      try {
+        final now = DateTime.now();
+        final startTime = DateFormat('yyyy-MM-dd HH:mm').parse('$dateKey ${lesson['start']}');
+        final endTime = DateFormat('yyyy-MM-dd HH:mm').parse('$dateKey ${lesson['end']}');
+
+        lesson['status'] = now.isAfter(startTime) && now.isBefore(endTime) ? 'tracking' : 'free';
+      } catch (_) {
+        lesson['status'] = 'free';
+      }
+
       setState(() {
         student.timetable.putIfAbsent(dateKey, () => []);
         if (editIndex != null) {
@@ -176,7 +255,41 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
       }
     }
   }
+  Future<Duration?> getTravelDuration({
+    required double fromLat,
+    required double fromLng,
+    required double toLat,
+    required double toLng,
+    required String googleApiKey,
+  }) async {
+    final url = Uri.parse(
+      'https://maps.googleapis.com/maps/api/directions/json'
+          '?origin=$fromLat,$fromLng'
+          '&destination=$toLat,$toLng'
+          '&mode=driving'
+          '&key=$googleApiKey',
+    );
 
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+
+      if (data['status'] == 'OK') {
+        final durationInSeconds =
+        data['routes'][0]['legs'][0]['duration']['value']; // 👈 thời gian giây
+        final readable = data['routes'][0]['legs'][0]['duration']['text'];
+        print('📦 Estimated duration: $readable');
+        return Duration(seconds: durationInSeconds);
+      } else {
+        print('❌ Google API error: ${data['status']}');
+      }
+    } else {
+      print('❌ Failed to fetch from Google API');
+    }
+
+    return null;
+  }
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -363,6 +476,7 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 6),
+
                                   Row(
                                     children: [
                                       const Icon(Icons.person_outline, size: 20, color: Colors.grey),
@@ -426,7 +540,7 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                           const Icon(Icons.location_on_outlined, size: 20, color: Colors.grey),
                                           const SizedBox(width: 6),
                                           Expanded(
-                                            child: Text('Địa chỉ đi: ${lesson['fromAddress']}', style: const TextStyle(fontSize: 15)),
+                                            child: Text('Điểm đi: ${lesson['fromAddress']}', style: const TextStyle(fontSize: 15)),
                                           ),
                                         ],
                                       ),
@@ -440,7 +554,7 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
                                           const Icon(Icons.location_on, size: 20, color: Colors.grey),
                                           const SizedBox(width: 6),
                                           Expanded(
-                                            child: Text('Địa chỉ về: ${lesson['toAddress']}', style: const TextStyle(fontSize: 15)),
+                                            child: Text('Điểm đến: ${lesson['toAddress']}', style: const TextStyle(fontSize: 15)),
                                           ),
                                         ],
                                       ),
@@ -699,8 +813,8 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                             icon: const Icon(Icons.location_on_outlined),
                             label: Text(
                               controllers['fromAddress']!.text.isNotEmpty
-                                  ? "Đi: ${controllers['fromAddress']!.text}"
-                                  : "Chọn địa chỉ đi",
+                                  ? "Chọn địa chỉ"
+                                  : "Chọn địa chỉ",
                               overflow: TextOverflow.ellipsis,
                             ),
                             onPressed: () async {
@@ -708,7 +822,8 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => CustomAddressPickerScreen(
-                                    title: "Chọn địa chỉ đi và về",
+                                    title: "Chọn địa chỉ",
+                                    isEditMode: true,
                                     initialFrom: _parseLatLng(controllers['fromLatLng']!.text),
                                     initialTo: _parseLatLng(controllers['toLatLng']!.text),
                                   ),
@@ -726,37 +841,6 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.location_on),
-                            label: Text(
-                              controllers['toAddress']!.text.isNotEmpty
-                                  ? "Về: ${controllers['toAddress']!.text}"
-                                  : "Chọn địa chỉ về",
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onPressed: () async {
-                              final result = await Navigator.push<Map<String, String>>(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CustomAddressPickerScreen(
-                                    title: "Chọn địa chỉ đi và về",
-                                    initialFrom: _parseLatLng(controllers['fromLatLng']!.text),
-                                    initialTo: _parseLatLng(controllers['toLatLng']!.text),
-                                  ),
-                                ),
-                              );
-                              if (result != null) {
-                                setState(() {
-                                  controllers['fromAddress']!.text = result['from'] ?? '';
-                                  controllers['toAddress']!.text = result['to'] ?? '';
-                                  controllers['fromLatLng']!.text = result['fromLatLng'] ?? '';
-                                  controllers['toLatLng']!.text = result['toLatLng'] ?? '';
-                                });
-                              }
-                            },
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -825,3 +909,29 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
   }
 }
 
+void checkAndNotifySchedule(DateTime start, String toLatLng) async {
+  final now = DateTime.now();
+  if (now.year == start.year &&
+      now.month == start.month &&
+      now.day == start.day &&
+      now.hour == start.hour &&
+      now.minute == start.minute) {
+    final position = await Geolocator.getCurrentPosition();
+    final destination = toLatLng.split(',');
+    final toLat = double.tryParse(destination[0]) ?? 0.0;
+    final toLng = double.tryParse(destination[1]) ?? 0.0;
+    final distanceMeters = Geolocator.distanceBetween(
+      position.latitude,
+      position.longitude,
+      toLat,
+      toLng,
+    );
+    final estimatedDuration = Duration(seconds: 5);
+    // Duration(minutes: (distanceMeters / 50).round()); // giả định đi bộ 50m/phút
+    await NotificationService().showLiveTrackingNotification(
+      toLatLng: toLatLng,
+      duration: estimatedDuration,
+    );
+
+  }
+}

@@ -45,8 +45,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'user_gender': '',
           'user_dob': '',
           'user_address': '',
-          'premium': false, // ✅ Thêm premium false
-          'premiumActivatedAt': null, // ✅ Dành cho server update khi thanh toán
+
         });
 
         // Chuyển sang màn xác thực email

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class ReportCardScreen extends StatefulWidget {
   const ReportCardScreen({super.key});
@@ -949,19 +950,27 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        SvgPicture.asset(
+                          'assets/images/empty.svg',
+                          height: 180,
+                        ),
+                        const SizedBox(height: 24),
                         const Text(
                           "Chưa có bảng điểm nào",
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black54,
+                            color: Color(0xFF333333),
                           ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
-                          icon: const Icon(Icons.add),
-                          label: const Text("Thêm môn học mới"),
+                          icon: const Icon(Icons.add, color: Colors.white),
+                          label: const Text(
+                            "Thêm môn học mới",
+                            style: TextStyle(color: Colors.white),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -1017,18 +1026,32 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  groupData['groupName'],
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.folder_copy, size: 20, color: Colors.deepPurple),
+                      const SizedBox(width: 6),
+                      Text(
+                        groupData['groupName'],
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepPurple,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),
                 Table(
                   columnWidths: const {
-                    0: FlexColumnWidth(2), // Môn học
+                    0: FlexColumnWidth(2),
                   },
                   border: TableBorder.symmetric(
                     inside: BorderSide(color: Colors.grey.shade300),
@@ -1036,51 +1059,41 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                   ),
                   defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                   children: [
-                    // Tiêu đề cột
                     TableRow(
                       decoration: BoxDecoration(color: Colors.grey[200]),
                       children: [
                         const Padding(
                           padding: EdgeInsets.all(8),
-                          child: Text(
-                            'Môn học',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                          child: Text('Môn học', style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                         ...columns.map((c) => Padding(
                           padding: const EdgeInsets.all(8),
-                          child: Text(
-                            c,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                          child: Text(c, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
                         )),
                         const Padding(
                           padding: EdgeInsets.all(8),
-                          child: Text(
-                            'Tổng điểm',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                          child: Text('Tổng điểm', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
-                    // Dữ liệu từng môn học
                     ...subjectsInGroup.map((subject) {
                       final subjectName = subject['name'];
                       final currentGrades = isEditingGrades
                           ? (tempGrades[student.id]?[subjectName] ?? {})
                           : (grades[subjectName] ?? {});
-
                       double total = 0;
+                      double max = 0;
                       for (int i = 0; i < columns.length; i++) {
                         final col = columns[i];
                         final weight = weights[i].toDouble();
+                        max += 10 * weight;
                         final raw = currentGrades[col];
                         if (raw is num) {
                           total += raw.toDouble() * weight;
                         }
                       }
+
+                      final progress = max > 0 ? total / max : 0.0;
 
                       return TableRow(
                         children: [
@@ -1116,14 +1129,25 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                             );
                           }).toList(),
                           Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Text(
-                              total.toStringAsFixed(1),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.teal,
-                              ),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                            child: Column(
+                              children: [
+                                Text(
+                                  total.toStringAsFixed(1),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.teal,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                LinearProgressIndicator(
+                                  value: progress,
+                                  backgroundColor: Colors.grey.shade300,
+                                  color: progress >= 0.5 ? Colors.teal : Colors.redAccent,
+                                  minHeight: 4,
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -1136,6 +1160,7 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
           ),
         ),
       );
+
     }
 
     return widgets;

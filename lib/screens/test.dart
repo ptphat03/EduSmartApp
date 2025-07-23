@@ -1,82 +1,125 @@
+// // 📁 Full code đã kết hợp PaymentService và PaymentScreen
 //
 // import 'package:flutter/material.dart';
-// import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-// import 'package:timezone/data/latest.dart' as tz;
-// import 'package:timezone/timezone.dart' as tz;
-// import '../main.dart';
+// import 'package:url_launcher/url_launcher.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
+// import 'package:cloud_firestore/cloud_firestore.dart';
+// import 'package:http/http.dart' as http;
+// import 'dart:convert';
 //
-// class ScheduleNotificationScreen extends StatefulWidget {
-//   const ScheduleNotificationScreen({super.key});
+// class PaymentService {
+//   static Future<String> createPaymentLink({
+//     required String userId,
+//     required String userName,
+//     required String userEmail,
+//   }) async {
+//     final now = DateTime.now();
+//     final expiredAt = now.add(const Duration(hours: 1));
+//     final amount = 20000;
 //
-//   @override
-//   State<ScheduleNotificationScreen> createState() =>
-//       _ScheduleNotificationScreenState();
+//     final response = await http.post(
+//       Uri.parse('https://api.payos.vn/v1/payment-requests'),
+//       headers: {
+//         'Content-Type': 'application/json',
+//         'x-client-id': 'YOUR_CLIENT_ID',
+//         'x-api-key': 'YOUR_API_KEY',
+//       },
+//       body: jsonEncode({
+//         'amount': amount,
+//         'description': 'Thanh toán Premium EduSmart',
+//         'returnUrl': 'https://yourapp.com/return',
+//         'cancelUrl': 'https://yourapp.com/cancel',
+//         'expiredAt': expiredAt.toIso8601String(),
+//         'buyerName': userName,
+//         'buyerEmail': userEmail,
+//         'orderCode': '${DateTime.now().millisecondsSinceEpoch}',
+//       }),
+//     );
+//
+//     if (response.statusCode != 200) {
+//       throw 'Không thể tạo link thanh toán: ${response.body}';
+//     }
+//
+//     final json = jsonDecode(response.body);
+//     final paymentUrl = json['checkoutUrl'];
+//     final transactionId = json['orderCode'];
+//
+//     await FirebaseFirestore.instance.collection('payments').doc(transactionId).set({
+//       'userId': userId,
+//       'userName': userName,
+//       'userEmail': userEmail,
+//       'amount': amount,
+//       'createdAt': now,
+//       'expiredAt': expiredAt,
+//       'status': 'pending',
+//       'paymentUrl': paymentUrl,
+//       'orderCode': transactionId,
+//     });
+//
+//     return paymentUrl;
+//   }
 // }
 //
-// class _ScheduleNotificationScreenState
-//     extends State<ScheduleNotificationScreen> {
-//   DateTime? selectedDateTime;
+// class PaymentScreen extends StatefulWidget {
+//   const PaymentScreen({super.key});
 //
 //   @override
-//   void initState() {
-//     super.initState();
-//     tz.initializeTimeZones();
-//   }
+//   State<PaymentScreen> createState() => _PaymentScreenState();
+// }
 //
-//   Future<void> _scheduleNotification(DateTime scheduledTime) async {
-//     final tz.TZDateTime tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
-//     await flutterLocalNotificationsPlugin.zonedSchedule(
-//       scheduledTime.millisecondsSinceEpoch ~/ 1000,
-//       'Lịch học sắp tới',
-//       'Sự kiện bắt đầu lúc ${scheduledTime.hour}:${scheduledTime.minute.toString().padLeft(2, '0')}',
-//       tzTime,
-//       const NotificationDetails(
-//         android: AndroidNotificationDetails(
-//           'schedule_channel',
-//           'Lịch học',
-//           importance: Importance.max,
-//           priority: Priority.high,
-//         ),
-//       ),
-//       androidAllowWhileIdle: true,
-//       uiLocalNotificationDateInterpretation:
-//       UILocalNotificationDateInterpretation.absoluteTime,
-//       matchDateTimeComponents: DateTimeComponents.dateAndTime,
-//     );
+// class _PaymentScreenState extends State<PaymentScreen> {
+//   bool isLoading = false;
+//
+//   Future<void> createPaymentAndLaunch() async {
+//     setState(() => isLoading = true);
+//
+//     try {
+//       final user = FirebaseAuth.instance.currentUser;
+//
+//       if (user == null) throw 'Bạn chưa đăng nhập';
+//
+//       final userId = user.uid;
+//       final fallbackName = user.displayName ?? 'No Name';
+//       final userEmail = user.email ?? 'noemail@example.com';
+//
+//       final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+//       final nameFromProfile = userDoc.data()?['name'] ?? fallbackName;
+//
+//       final paymentUrl = await PaymentService.createPaymentLink(
+//         userId: userId,
+//         userName: nameFromProfile,
+//         userEmail: userEmail,
+//       );
+//
+//       final uri = Uri.parse(paymentUrl);
+//       if (await canLaunchUrl(uri)) {
+//         await launchUrl(uri, mode: LaunchMode.externalApplication);
+//       } else {
+//         throw 'Không thể mở link thanh toán.';
+//       }
+//     } catch (e) {
+//       debugPrint('Payment error: $e');
+//       if (mounted) {
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           SnackBar(content: Text('Lỗi: $e')),
+//         );
+//       }
+//     } finally {
+//       if (mounted) setState(() => isLoading = false);
+//     }
 //   }
 //
 //   @override
 //   Widget build(BuildContext context) {
 //     return Scaffold(
-//       appBar: AppBar(title: const Text("Hẹn giờ thông báo")),
+//       appBar: AppBar(title: const Text('Thanh toán Premium')),
 //       body: Center(
-//         child: ElevatedButton(
-//           child: const Text("Chọn thời gian"),
-//           onPressed: () async {
-//             final now = DateTime.now();
-//             final selected = await showDatePicker(
-//               context: context,
-//               initialDate: now,
-//               firstDate: now,
-//               lastDate: now.add(const Duration(days: 30)),
-//             );
-//             if (selected != null) {
-//               final time = await showTimePicker(
-//                 context: context,
-//                 initialTime: TimeOfDay.now(),
-//               );
-//               if (time != null) {
-//                 final dt = DateTime(
-//                   selected.year,
-//                   selected.month,
-//                   selected.day,
-//                   time.hour,
-//                   time.minute,
-//                 );
-//                 await _scheduleNotification(dt);
-//               }
-//             }
-//           },
+//         child: isLoading
+//             ? const CircularProgressIndicator()
+//             : ElevatedButton.icon(
+//           onPressed: createPaymentAndLaunch,
+//           icon: const Icon(Icons.payment),
+//           label: const Text('Thanh toán 20.000 VND'),
 //         ),
 //       ),
 //     );
