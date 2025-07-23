@@ -120,7 +120,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
     return Scaffold(
       backgroundColor: Colors.blue[50],
       appBar: AppBar(
-        backgroundColor: Colors.blue,
+        backgroundColor: Colors.blue.shade700,
         foregroundColor: Colors.white,
         title: const Text(
           "Thông tin người dùng",
@@ -154,7 +154,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
                     "Điền thông tin của bạn",
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.blue[800],
+                      color: Colors.blue[700],
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -224,7 +224,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
                       ),
                       onPressed: saveUserInfo,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
+                        backgroundColor: Colors.blue.shade700,
                         foregroundColor: Colors.white, // Cách viết chuẩn
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),

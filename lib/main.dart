@@ -57,7 +57,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: const LoginScreenTest(),
+      home: const LoginScreen(),
       routes: {
         '/payment': (context) => const PaymentScreen(),
         '/tracking': (context) => const TrackingBoardScreen(), // 👈 Thêm route nếu cần// 👈 route thêm vào

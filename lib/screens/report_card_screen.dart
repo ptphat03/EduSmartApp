@@ -35,29 +35,38 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    final studentsSnap = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('students')
-        .get();
+    try {
+      final studentsSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('students')
+          .get();
 
-    students = studentsSnap.docs.map((doc) {
-      final data = doc.data();
-      return Student(
-        id: doc.id,
-        name: data['student_name'] ?? 'Không tên',
-        grades: Map<String, dynamic>.from(data['grades'] ?? {}),
-      );
-    }).toList();
+      students = studentsSnap.docs.map((doc) {
+        final data = doc.data();
+        return Student(
+          id: doc.id,
+          name: data['student_name'] ?? 'Không tên',
+          grades: Map<String, dynamic>.from(data['grades'] ?? {}),
+        );
+      }).toList();
 
-    if (students.isNotEmpty) {
-      selectedStudentId = students.first.id;
-      await loadGradeGroups();
-      await loadStudentSubjects();
+      if (students.isNotEmpty) {
+        selectedStudentId = students.first.id;
+        await loadGradeGroups();
+        await loadStudentSubjects();
+      }
+
+      // 🛡️ Kiểm tra widget còn tồn tại không
+      if (!mounted) return;
+
+      setState(() => isLoading = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isLoading = false); // Bạn có thể hiển thị lỗi ở đây nếu cần
     }
-
-    setState(() => isLoading = false);
   }
+
 
   Future<void> loadGradeGroups() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -947,41 +956,49 @@ class _ReportCardScreenState extends State<ReportCardScreen> {
                     ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SvgPicture.asset(
-                          'assets/images/empty.svg',
-                          height: 180,
-                        ),
-                        const SizedBox(height: 24),
-                        const Text(
-                          "Chưa có bảng điểm nào",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF333333),
+                    child: SingleChildScrollView(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SvgPicture.asset(
+                                'assets/images/empty.svg',
+                                height: 180,
+                              ),
+                              const SizedBox(height: 24),
+                              const Text(
+                                "Chưa có bảng điểm nào",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF333333),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                icon: const Icon(Icons.add, color: Colors.white),
+                                label: const Text(
+                                  "Thêm môn học mới",
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                onPressed: showSubjectManagerDialog,
+                              ),
+                            ],
                           ),
-                          textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.add, color: Colors.white),
-                          label: const Text(
-                            "Thêm môn học mới",
-                            style: TextStyle(color: Colors.white),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: showSubjectManagerDialog,
-                        ),
-                      ],
+                      ),
                     ),
+
                   ),
                 )
                     : ListView(

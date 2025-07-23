@@ -211,11 +211,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Chỉnh sửa hồ sơ"),
+        backgroundColor: Colors.blue.shade700, // Nền xanh dương
+        title: const Text(
+          "Chỉnh sửa hồ sơ",
+          style: TextStyle(
+            color: Colors.white,        // Chữ màu trắng
+            fontWeight: FontWeight.bold, // In đậm
+          ),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white), // Icon màu trắng
         actions: [
-          IconButton(onPressed: saveData, icon: const Icon(Icons.save)),
+          IconButton(
+            onPressed: saveData,
+            icon: const Icon(Icons.save),
+            color: Colors.white, // Icon màu trắng
+          ),
         ],
       ),
+
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(

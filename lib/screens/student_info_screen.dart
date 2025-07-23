@@ -127,7 +127,7 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
           "Thông tin học sinh",
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.blue,
+        backgroundColor: Colors.blue.shade700,
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -221,7 +221,7 @@ class _StudentInfoScreenState extends State<StudentInfoScreen> {
                       ),
                       onPressed: saveStudentInfo,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
+                        backgroundColor: Colors.blue.shade700,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
