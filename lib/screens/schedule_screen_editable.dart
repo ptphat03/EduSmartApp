@@ -89,7 +89,6 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
     }
   }
 
-  final Map<int, Timer> _trackingTimers = {};
 
   Future<void> scheduleLessons(List<Map<String, dynamic>> lessons, String dateStr) async {
     for (final lesson in lessons) {
@@ -106,50 +105,47 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
         final startId = lessonId.hashCode;
         await NotificationService().cancel(startId);
 
-        final toLatLngStr = (lesson['toLatLng'] ?? '').toString();
-        final parts = toLatLngStr.split(',');
-
-        if (parts.length == 2) {
-          final toLat = double.tryParse(parts[0]);
-          final toLng = double.tryParse(parts[1]);
+        Duration? duration;
+        String? toLatLngStr = lesson['fromLatLng']?.toString(); // 👉 đi học
+        if (toLatLngStr != null && toLatLngStr.contains(',')) {
+          final parts = toLatLngStr.split(',');
+          final toLat = double.tryParse(parts[0].trim());
+          final toLng = double.tryParse(parts[1].trim());
 
           if (toLat != null && toLng != null) {
             final current = await Geolocator.getCurrentPosition();
-            final duration = await getTravelDuration(
+            duration = await getTravelDuration(
               fromLat: current.latitude,
               fromLng: current.longitude,
               toLat: toLat,
               toLng: toLng,
               googleApiKey: 'AIzaSyDYVFN1cOdEHVPvEnkro8Jk79vK2zhisII',
             );
+          }
+        }
 
-            if (duration != null) {
-              final notifyTime = scheduledStart.subtract(duration);
+        if (scheduledStart.isAfter(DateTime.now())) {
+          await NotificationService().scheduleNotification(
+            id: startId,
+            title: "Môn học: $subject",
+            body: notes.isNotEmpty
+                ? notes
+                : "Chuẩn bị - Lớp học bắt đầu từ ${start.toString()}",
+            scheduledTime: scheduledStart,
+          );
 
-              if (notifyTime.isAfter(DateTime.now())) {
-                await NotificationService().scheduleNotification(
-                  id: startId,
-                  title: "Môn học: $subject",
-                  body: notes.isNotEmpty
-                      ? notes
-                      : "Chuẩn bị - Lớp học bắt đầu từ ${start.toString()}",
-                  scheduledTime: notifyTime,
-                );
-
-                // 🔔 Tracking Notification luôn bằng zonedSchedule
-                await NotificationService().scheduleLiveTrackingNotification(
-                  id: startId + 1000,
-                  toLatLng: '$toLat,$toLng',
-                  duration: duration,
-                  type: 'start',
-                  scheduledTime: notifyTime.add(const Duration(seconds: 5)),
-                );
-              }
-            }
+          if (duration != null && toLatLngStr != null) {
+            await NotificationService().scheduleLiveTrackingNotification(
+              id: startId + 1000,
+              toLatLng: toLatLngStr,
+              duration: duration,
+              type: 'start',
+              scheduledTime: scheduledStart.add(const Duration(seconds: 5)),
+            );
           }
         }
       } catch (e) {
-        print("❌ Lỗi xử lý bắt đầu: $e");
+        print("❌ Lỗi xử lý bắt đầu '$subject': $e");
       }
 
       // === 🔔 KẾT THÚC ===
@@ -159,39 +155,41 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
         final endId = lessonId.hashCode + 1;
         await NotificationService().cancel(endId);
 
-        final fromLatLngStr = (lesson['fromLatLng'] ?? '').toString();
-        final parts = fromLatLngStr.split(',');
-
-        if (parts.length == 2) {
+        Duration? duration;
+        String? fromLatLngStr = lesson['toLatLng']?.toString(); // 👉 về nhà
+        if (fromLatLngStr != null && fromLatLngStr.contains(',')) {
+          final parts = fromLatLngStr.split(',');
           final toLat = double.tryParse(parts[0].trim());
           final toLng = double.tryParse(parts[1].trim());
 
           if (toLat != null && toLng != null) {
             final current = await Geolocator.getCurrentPosition();
-            final duration = await getTravelDuration(
+            duration = await getTravelDuration(
               fromLat: current.latitude,
               fromLng: current.longitude,
               toLat: toLat,
               toLng: toLng,
               googleApiKey: 'AIzaSyDYVFN1cOdEHVPvEnkro8Jk79vK2zhisII',
             );
+          }
+        }
 
-            if (duration != null && scheduledEnd.isAfter(DateTime.now())) {
-              await NotificationService().scheduleNotification(
-                id: endId,
-                title: "🚌 Hết giờ: $subject",
-                body: "Buổi học kết thúc lúc ${end.toString()}. Chuẩn bị về nhà!",
-                scheduledTime: scheduledEnd,
-              );
+        if (scheduledEnd.isAfter(DateTime.now())) {
+          await NotificationService().scheduleNotification(
+            id: endId,
+            title: "🚌 Hết giờ: $subject",
+            body: "Buổi học kết thúc lúc ${end.toString()}. Chuẩn bị về nhà!",
+            scheduledTime: scheduledEnd,
+          );
 
-              await NotificationService().scheduleLiveTrackingNotification(
-                id: endId + 1000,
-                toLatLng: '$toLat,$toLng',
-                duration: duration,
-                type: 'end',
-                scheduledTime: scheduledEnd.add(const Duration(seconds: 5)),
-              );
-            }
+          if (duration != null && fromLatLngStr != null) {
+            await NotificationService().scheduleLiveTrackingNotification(
+              id: endId + 1000,
+              toLatLng: fromLatLngStr,
+              duration: duration,
+              type: 'end',
+              scheduledTime: scheduledEnd.add(const Duration(seconds: 5)),
+            );
           }
         }
       } catch (e) {
@@ -199,6 +197,9 @@ class _EditableScheduleScreenState extends State<EditableScheduleScreen> {
       }
     }
   }
+
+
+
 
 
 

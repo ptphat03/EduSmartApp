@@ -37,17 +37,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       final user = userCredential.user;
       if (user != null) {
-        // ✅ Thêm user vào Firestore với premium = false
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'uid': user.uid,
-          'email': user.email,
-          'user_display_name': user.displayName ?? '',
-          'user_gender': '',
-          'user_dob': '',
-          'user_address': '',
-        });
-
-        // Chuyển sang màn xác thực email
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(

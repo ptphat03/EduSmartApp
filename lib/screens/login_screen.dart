@@ -18,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   bool isLoading = false;
+  bool isPasswordVisible = false;
 
   Future<void> login() async {
     setState(() => isLoading = true);
@@ -52,9 +53,9 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } on FirebaseAuthException catch (e) {
-      String message = "Lỗi đăng nhập";
-      if (e.code == 'user-not-found') {
-        message = "Không tìm thấy người dùng";
+      String message = "Vui lòng điền đầy đủ email và mật khẩu để đăng nhập";
+      if (e.code == 'invalid-credential') {
+        message = "Email hoặc mật khẩu không đúng";
       } else if (e.code == 'wrong-password') {
         message = "Sai mật khẩu";
       } else if (e.code == 'invalid-email') {
@@ -123,9 +124,20 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: passwordController,
+                obscureText: !isPasswordVisible, // 🔒 ẩn khi false
                 decoration: InputDecoration(
                   labelText: "Mật khẩu",
                   prefixIcon: const Icon(Icons.lock),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        isPasswordVisible = !isPasswordVisible;
+                      });
+                    },
+                  ),
                   filled: true,
                   fillColor: Colors.grey.shade100,
                   border: OutlineInputBorder(borderRadius: borderRadius),
@@ -134,8 +146,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderSide: BorderSide(color: primaryColor),
                   ),
                 ),
-                obscureText: true,
               ),
+
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerRight,

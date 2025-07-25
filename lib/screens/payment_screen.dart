@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/payment_service.dart';
+import 'webview_payment_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
   const PaymentScreen({super.key});
@@ -18,18 +18,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
     setState(() => isLoading = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
-
-      if (user == null) {
-        throw 'Bạn chưa đăng nhập';
-      }
+      if (user == null) throw 'Bạn chưa đăng nhập';
 
       final userId = user.uid;
-      final userName = user.displayName ?? 'No Name';
       final userEmail = user.email ?? 'noemail@example.com';
+      final userName = user.displayName ?? 'No Name';
 
-      // Nếu bạn cần lấy thêm thông tin user từ Firestore:
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(
-          userId).get();
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
       final userData = userDoc.data();
       final nameFromProfile = userData?['name'] ?? userName;
 
@@ -39,13 +34,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
         userEmail: userEmail,
       );
 
-      final uri = Uri.parse(paymentUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        Navigator.pop(context); // quay lại màn trước (ví dụ: TrackingBoardScreen)
-      } else {
-        throw 'Không thể mở link: $paymentUrl';
+      if (!mounted) return;
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WebViewPaymentScreen(paymentUrl: paymentUrl),
+        ),
+      );
+
+      if (result == true) {
+        Navigator.pop(context); // ✅ Quay về trước của PaymentScreen
       }
+
     } catch (e) {
       print('Payment error: $e');
       if (mounted) {
@@ -64,15 +64,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
       appBar: AppBar(
         title: const Text(
           'Thanh toán',
-          style: TextStyle(
-            color: Colors.white,           // 🔹 Chữ trắng
-            fontWeight: FontWeight.bold,  // 🔹 In đậm
-            fontSize: 20,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
         ),
         backgroundColor: Colors.blue.shade700,
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white), // 🔹 Mũi tên back màu trắng
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Center(
         child: Padding(
@@ -83,8 +79,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             children: [
               CircularProgressIndicator(),
               SizedBox(height: 16),
-              Text("Đang tạo liên kết thanh toán...",
-                  style: TextStyle(fontSize: 16)),
+              Text("Đang tạo liên kết thanh toán...", style: TextStyle(fontSize: 16)),
             ],
           )
               : Card(
@@ -101,23 +96,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   const SizedBox(height: 16),
                   const Text(
                     "Nâng cấp lên Premium",
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    "20.000đ/tháng\n"
-                        "Truy cập tính năng theo dõi hành trình",
+                    "20.000đ/tháng\nTruy cập tính năng theo dõi hành trình",
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.black87,
-                      fontWeight: FontWeight.bold, // 🔹 In đậm
-                    ),
+                    style: TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold),
                   ),
-
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
