@@ -4,15 +4,15 @@ EduSmartApp is a smart learning application built with **Flutter**, designed to 
 
 ---
 
-## ✨ Features
-- 👩‍🏫 Manage courses and lessons.
-- 📅 Learning schedule with reminders.
-- 🔔 Notification system to never miss a lesson.
-- ☁️ Data synchronization (can be integrated with Firebase or a custom API backend).
+## Features
+- Manage courses and lessons.
+- Learning schedule with reminders.
+- Notification system to never miss a lesson.
+- ☁Data synchronization (can be integrated with Firebase or a custom API backend).
 
 ---
 
-## 🛠️ Technologies Used
+## Technologies Used
 - [Flutter](https://flutter.dev/) (Dart)
 - Kotlin (native Android integration)
 - Common Flutter packages:
@@ -23,7 +23,7 @@ EduSmartApp is a smart learning application built with **Flutter**, designed to 
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 ```
 EduSmartApp/
 ├── android/              # Android configuration (Gradle, manifest…)
@@ -40,7 +40,7 @@ EduSmartApp/
 
 ---
 
-## ⚡ Installation & Run
+## Installation & Run
 1. Clone the repository:
    ```bash
    git clone https://github.com/ptphat03/EduSmartApp.git
@@ -58,7 +58,7 @@ EduSmartApp/
 
 ---
 
-## 📧 Contact
+## Contact
 - Author: **[ptphat03](https://github.com/ptphat03)**
 
 ---
