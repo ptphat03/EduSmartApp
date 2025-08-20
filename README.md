@@ -8,7 +8,7 @@ EduSmartApp is a smart learning application built with **Flutter**, designed to 
 - Manage courses and lessons.
 - Learning schedule with reminders.
 - Notification system to never miss a lesson.
-- ☁Data synchronization (can be integrated with Firebase or a custom API backend).
+- Data synchronization (can be integrated with Firebase or a custom API backend).
 
 ---
 
